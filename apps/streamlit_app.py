@@ -7,6 +7,7 @@ import sys
 from typing import Any
 
 import pandas as pd
+import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = PROJECT_ROOT / "src"
@@ -16,6 +17,8 @@ if str(SRC_DIR) not in sys.path:
 from daily_bias_engine.data import MockWindDataClient
 from daily_bias_engine.features import factor_logic_rows
 from daily_bias_engine.pipeline import (
+    SnapshotInfo,
+    default_history_range,
     list_snapshots,
     run_pipeline_from_client,
     run_pipeline_from_snapshot,
@@ -26,8 +29,8 @@ SNAPSHOT_ROOT = PROJECT_ROOT / "data" / "snapshots"
 
 
 def run_demo_pipeline(
-    start_date: str = "2024-01-01",
-    end_date: str = "2024-04-30",
+    start_date: str | None = None,
+    end_date: str | None = None,
     data_mode: str = "mock",
     snapshot_dir: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -41,6 +44,11 @@ def run_demo_pipeline(
             snapshot_dir = snapshots[0].path
         return run_pipeline_from_snapshot(snapshot_dir=snapshot_dir, config_dir=CONFIG_DIR)
 
+    if start_date is None or end_date is None:
+        default_start, default_end = default_history_range()
+        start_date = start_date or default_start
+        end_date = end_date or default_end
+
     client = MockWindDataClient()
     return run_pipeline_from_client(
         client=client,
@@ -51,50 +59,47 @@ def run_demo_pipeline(
     )
 
 
-def main() -> None:
-    import streamlit as st
+@st.cache_data(show_spinner="正在加载本地快照并计算信号...")
+def _cached_dashboard_result(
+    data_mode: str,
+    snapshot_dir: str | None,
+    start_date: str | None,
+    end_date: str | None,
+) -> dict[str, Any]:
+    return run_demo_pipeline(
+        start_date=start_date,
+        end_date=end_date,
+        data_mode=data_mode,
+        snapshot_dir=snapshot_dir,
+    )
 
+
+def main() -> None:
     st.set_page_config(page_title="市场风向机", layout="wide")
     st.title("市场风向机 / Daily Bias Engine")
 
     snapshots = list_snapshots(SNAPSHOT_ROOT)
-    default_mode = "本地快照" if snapshots else "Mock 演示"
-
-    with st.sidebar:
-        st.header("运行参数")
-        data_mode_label = st.radio("数据源", ["本地快照", "Mock 演示"], index=0 if default_mode == "本地快照" else 1)
-        selected_snapshot = None
-        if data_mode_label == "本地快照":
-            if snapshots:
-                snapshot_labels = [item.label for item in snapshots]
-                selected_label = st.selectbox("快照", snapshot_labels)
-                selected_snapshot = snapshots[snapshot_labels.index(selected_label)].path
-                st.caption("Wind 数据请先用脚本抓取到本地快照，页面只负责读取。")
-            else:
-                st.warning("还没有本地快照。请先运行 scripts/fetch_wind_snapshot.py。")
-
-        start_date = st.date_input("开始日期", value=pd.Timestamp("2024-01-01"), disabled=data_mode_label == "本地快照")
-        end_date = st.date_input("结束日期", value=pd.Timestamp("2024-04-30"), disabled=data_mode_label == "本地快照")
-        run_button = st.button("运行", type="primary")
-
-    if run_button or "demo_result" not in st.session_state:
-        try:
-            if data_mode_label == "本地快照":
-                st.session_state["demo_result"] = run_demo_pipeline(data_mode="snapshot", snapshot_dir=selected_snapshot)
-                st.session_state["data_warning"] = ""
-            else:
-                st.session_state["demo_result"] = run_demo_pipeline(str(start_date), str(end_date), data_mode="mock")
-                st.session_state["data_warning"] = ""
-        except Exception as exc:
-            st.session_state["demo_result"] = run_demo_pipeline(str(start_date), str(end_date), data_mode="mock")
-            st.session_state["data_warning"] = f"本地快照读取失败，已回退到 Mock 演示：{exc}"
-
-    result = st.session_state["demo_result"]
-    latest = result["report"]["latest"]
+    snapshot_info = snapshots[0] if snapshots else None
+    result, data_warning = _load_dashboard_data(snapshot_info)
+    scores = result["scores"].copy()
+    labels = result["labels"].copy()
+    factors = result["factors"].copy()
     metrics = result["metrics"]
-    if st.session_state.get("data_warning"):
-        st.warning(st.session_state["data_warning"])
-    st.caption(f"当前数据源：{_data_mode_label(result.get('data_mode', 'mock'))}")
+    if data_warning:
+        st.warning(data_warning)
+
+    signal_dates = _date_options(scores)
+    if not signal_dates:
+        st.error("当前数据没有可展示的信号日期。")
+        return
+
+    selected_date = st.selectbox("选择信号日期", signal_dates, index=len(signal_dates) - 1)
+    selected_row = _selected_engine_row(scores, selected_date)
+    selected_explanation = selected_row.get("explanation", {}) if selected_row else {}
+    selected_label = _selected_label_row(labels, selected_date)
+    selected_factors = _factor_rows_for_date(factors, selected_date)
+
+    st.caption(_data_status_text(result, snapshot_info, scores))
 
     overview, factors_tab, engine_tab, labels_tab, backtest_tab, logic_tab = st.tabs(
         ["总览", "因子", "引擎", "标签", "回测", "逻辑说明"]
@@ -102,44 +107,46 @@ def main() -> None:
 
     with overview:
         columns = st.columns(6)
-        columns[0].metric("信号日期", latest.get("date", "N/A"))
-        columns[1].metric("市场风向", _bias_label(latest.get("bias_label")))
-        columns[2].metric("总分", _format_float(latest.get("total_score")))
-        columns[3].metric("趋势日概率", f"{_format_float(latest.get('trend_day_probability'))}%")
-        columns[4].metric("趋势方向", _trend_label(latest.get("trend_direction_bias")))
-        columns[5].metric("置信度", f"{_format_float(latest.get('confidence'))}%")
+        columns[0].metric("信号日期", selected_date)
+        columns[1].metric("市场风向", _bias_label(selected_row.get("bias_label") if selected_row else None))
+        columns[2].metric("总分", _format_float(selected_row.get("total_score") if selected_row else None))
+        columns[3].metric("趋势日概率", f"{_format_float(selected_row.get('trend_day_probability') if selected_row else None)}%")
+        columns[4].metric("趋势方向", _trend_label(selected_row.get("trend_direction_bias") if selected_row else None))
+        columns[5].metric("置信度", f"{_format_float(selected_row.get('confidence') if selected_row else None)}%")
 
-        explanation = latest.get("explanation", {})
         st.subheader("每日环境卡片")
-        st.write(_trading_posture(latest))
+        st.write(_trading_posture(selected_row))
+
+        label_text = _label_summary_text(selected_label)
+        if label_text:
+            st.caption(label_text)
 
         driver_columns = st.columns(2)
         with driver_columns[0]:
             st.subheader("正向驱动")
-            st.dataframe(pd.DataFrame(explanation.get("positive_drivers", [])), use_container_width=True)
+            st.dataframe(_drivers_table(selected_explanation.get("positive_drivers", [])), width="stretch", hide_index=True)
         with driver_columns[1]:
             st.subheader("负向驱动")
-            st.dataframe(pd.DataFrame(explanation.get("negative_drivers", [])), use_container_width=True)
+            st.dataframe(_drivers_table(selected_explanation.get("negative_drivers", [])), width="stretch", hide_index=True)
 
         st.subheader("风险硬标记")
-        risk_flags = latest.get("risk_flags_json", [])
+        risk_flags = selected_row.get("risk_flags_json", []) if selected_row else []
         if risk_flags:
-            st.dataframe(pd.DataFrame(risk_flags), use_container_width=True)
+            st.dataframe(_risk_flags_table(risk_flags), width="stretch", hide_index=True)
         else:
             st.write("无")
 
     with factors_tab:
-        st.dataframe(result["factors"], use_container_width=True)
+        st.subheader(f"{selected_date} 信号使用的因子")
+        st.dataframe(_factor_display_table(selected_factors), width="stretch", hide_index=True)
+        with st.expander("查看全部三年因子明细"):
+            st.dataframe(_factor_display_table(factors), width="stretch", hide_index=True)
 
     with engine_tab:
-        scores = result["scores"].copy()
         st.subheader("每日信号总览")
-        st.dataframe(_engine_summary_table(scores), use_container_width=True, hide_index=True)
+        st.dataframe(_engine_summary_table(scores), width="stretch", hide_index=True)
 
-        selected_date = st.selectbox("查看某一天的引擎解释", _date_options(scores), index=max(len(scores) - 1, 0))
-        selected_row = _selected_engine_row(scores, selected_date)
-        selected_explanation = selected_row.get("explanation", {}) if selected_row else {}
-
+        st.subheader(f"{selected_date} 引擎解释")
         detail_columns = st.columns(5)
         detail_columns[0].metric("市场风向", _bias_label(selected_row.get("bias_label") if selected_row else None))
         detail_columns[1].metric("总分", _format_float(selected_row.get("total_score") if selected_row else None))
@@ -148,25 +155,25 @@ def main() -> None:
         detail_columns[4].metric("置信度", f"{_format_float(selected_row.get('confidence') if selected_row else None)}%")
 
         st.subheader("分项分")
-        st.dataframe(_sub_scores_table(selected_row.get("sub_scores", {}) if selected_row else {}), use_container_width=True, hide_index=True)
+        st.dataframe(_sub_scores_table(selected_row.get("sub_scores", {}) if selected_row else {}), width="stretch", hide_index=True)
 
         st.subheader("风险硬标记")
         risk_flags = selected_row.get("risk_flags_json", []) if selected_row else []
         if risk_flags:
-            st.dataframe(_risk_flags_table(risk_flags), use_container_width=True, hide_index=True)
+            st.dataframe(_risk_flags_table(risk_flags), width="stretch", hide_index=True)
         else:
             st.write("无风险硬标记。")
 
         driver_columns = st.columns(2)
         with driver_columns[0]:
             st.subheader("正向驱动")
-            st.dataframe(_drivers_table(selected_explanation.get("positive_drivers", [])), use_container_width=True, hide_index=True)
+            st.dataframe(_drivers_table(selected_explanation.get("positive_drivers", [])), width="stretch", hide_index=True)
         with driver_columns[1]:
             st.subheader("负向驱动")
-            st.dataframe(_drivers_table(selected_explanation.get("negative_drivers", [])), use_container_width=True, hide_index=True)
+            st.dataframe(_drivers_table(selected_explanation.get("negative_drivers", [])), width="stretch", hide_index=True)
 
         st.subheader("全部因子贡献")
-        st.dataframe(_factor_contribution_table(selected_explanation.get("factors", [])), use_container_width=True, hide_index=True)
+        st.dataframe(_factor_contribution_table(selected_explanation.get("factors", [])), width="stretch", hide_index=True)
 
     with labels_tab:
         st.markdown(
@@ -176,7 +183,13 @@ def main() -> None:
             说明当天实际走势符合“下跌趋势日/大亏日”的定义。
             """
         )
-        st.dataframe(result["labels"], use_container_width=True)
+        if selected_label:
+            st.subheader(f"{selected_date} 收盘后标签")
+            st.dataframe(_label_display_table(pd.DataFrame([selected_label])), width="stretch", hide_index=True)
+        else:
+            st.info(f"{selected_date} 还没有对应的收盘后标签。最近一个信号日通常是下一交易日开盘前信号。")
+        st.subheader("全部标签")
+        st.dataframe(_label_display_table(labels), width="stretch", hide_index=True)
 
     with backtest_tab:
         st.subheader("回测摘要")
@@ -190,10 +203,10 @@ def main() -> None:
         metric_columns[5].metric("Risk-Off 误伤率", _format_percent(metrics.get("false_risk_off_rate")))
 
         st.subheader("指标解释")
-        st.dataframe(_metrics_explanation_table(metrics), use_container_width=True, hide_index=True)
+        st.dataframe(_metrics_explanation_table(metrics), width="stretch", hide_index=True)
 
         st.subheader("逐日复盘")
-        st.dataframe(_backtest_review_table(result["scores"], result["labels"]), use_container_width=True, hide_index=True)
+        st.dataframe(_backtest_review_table(scores, labels), width="stretch", hide_index=True)
 
     with logic_tab:
         st.subheader("系统如何使用这些因子")
@@ -210,7 +223,137 @@ def main() -> None:
             proxy；指数样本上涨比例是真实 Wind 价格派生结果，但它只是全市场上涨家数的 proxy。
             """
         )
-        st.dataframe(pd.DataFrame(factor_logic_rows()), use_container_width=True)
+        st.dataframe(pd.DataFrame(factor_logic_rows()), width="stretch")
+
+
+def _load_dashboard_data(snapshot_info: SnapshotInfo | None) -> tuple[dict[str, Any], str]:
+    if snapshot_info is not None:
+        try:
+            result = _cached_dashboard_result("snapshot", str(snapshot_info.path), None, None)
+            return result, ""
+        except Exception as exc:
+            start_date, end_date = default_history_range()
+            result = _cached_dashboard_result("mock", None, start_date, end_date)
+            return result, f"本地快照读取失败，已回退到最近三年 Mock 演示：{exc}"
+
+    start_date, end_date = default_history_range()
+    result = _cached_dashboard_result("mock", None, start_date, end_date)
+    return result, "没有找到本地快照，当前显示最近三年的 Mock 演示。真实数据请先运行 `python scripts/fetch_wind_snapshot.py`。"
+
+
+def _data_status_text(result: dict[str, Any], snapshot_info: SnapshotInfo | None, scores: pd.DataFrame) -> str:
+    dates = pd.to_datetime(scores["date"]).dt.strftime("%Y-%m-%d")
+    signal_range = f"{dates.min()} 至 {dates.max()}" if not dates.empty else "N/A"
+    base = (
+        f"当前数据源：{_data_mode_label(result.get('data_mode', 'mock'))} | "
+        f"信号日期范围：{signal_range} | "
+        f"信号日数量：{len(scores)}"
+    )
+    if snapshot_info is None:
+        return f"{base} | 页面自动使用三年默认区间"
+    return (
+        f"{base} | 自动读取最新快照：{snapshot_info.source} "
+        f"{snapshot_info.start_date} 至 {snapshot_info.end_date} | "
+        f"生成时间：{snapshot_info.created_at}"
+    )
+
+
+def _selected_label_row(labels: pd.DataFrame, selected_date: str) -> dict[str, Any]:
+    if labels.empty:
+        return {}
+    prepared = labels.copy()
+    prepared["date_label"] = pd.to_datetime(prepared["date"]).dt.strftime("%Y-%m-%d")
+    matched = prepared[prepared["date_label"] == selected_date]
+    if matched.empty:
+        return {}
+    return matched.iloc[0].drop(labels=["date_label"]).to_dict()
+
+
+def _factor_rows_for_date(factors: pd.DataFrame, selected_date: str) -> pd.DataFrame:
+    if factors.empty:
+        return factors.copy()
+    prepared = factors.copy()
+    prepared["date_label"] = pd.to_datetime(prepared["date"]).dt.strftime("%Y-%m-%d")
+    return prepared[prepared["date_label"] == selected_date].drop(columns=["date_label"])
+
+
+def _factor_display_table(factors: pd.DataFrame) -> pd.DataFrame:
+    columns = ["信号日期", "数据日期", "因子", "模块", "原始值", "z-score", "方向分", "可用时间"]
+    if factors.empty:
+        return pd.DataFrame(columns=columns)
+    logic_groups = {row["factor_name"]: row["group"] for row in factor_logic_rows()}
+    table = factors.copy()
+    table["group"] = table["factor_name"].map(logic_groups).fillna("未分组")
+    table["date"] = pd.to_datetime(table["date"]).dt.strftime("%Y-%m-%d")
+    table["data_date"] = pd.to_datetime(table["data_date"]).dt.strftime("%Y-%m-%d")
+    table = table.rename(
+        columns={
+            "date": "信号日期",
+            "data_date": "数据日期",
+            "factor_name": "因子",
+            "group": "模块",
+            "raw_value": "原始值",
+            "zscore_value": "z-score",
+            "directional_score": "方向分",
+            "asof_time": "可用时间",
+        }
+    )
+    return _round_numeric(table[columns].sort_values(["信号日期", "模块", "因子"]))
+
+
+def _label_display_table(labels: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "日期",
+        "市场收益",
+        "开收盘方向",
+        "日内振幅",
+        "实体占比",
+        "收盘位置",
+        "趋势日",
+        "上行趋势日",
+        "下行趋势日",
+        "大亏日",
+        "震荡日",
+    ]
+    if labels.empty:
+        return pd.DataFrame(columns=columns)
+    table = labels.copy()
+    table["date"] = pd.to_datetime(table["date"]).dt.strftime("%Y-%m-%d")
+    table["open_close_direction"] = table["open_close_direction"].map(_direction_label)
+    table = table.rename(
+        columns={
+            "date": "日期",
+            "market_return": "市场收益",
+            "open_close_direction": "开收盘方向",
+            "intraday_range": "日内振幅",
+            "body_ratio": "实体占比",
+            "close_location": "收盘位置",
+            "trend_day_flag": "趋势日",
+            "up_trend_day_flag": "上行趋势日",
+            "down_trend_day_flag": "下行趋势日",
+            "big_loss_day_flag": "大亏日",
+            "choppy_day_flag": "震荡日",
+        }
+    )
+    return _round_numeric(table[columns].sort_values("日期", ascending=False))
+
+
+def _label_summary_text(label: dict[str, Any]) -> str:
+    if not label:
+        return "该信号日尚无收盘后结果标签。"
+    tags = []
+    if bool(label.get("trend_day_flag")):
+        tags.append("趋势日")
+    if bool(label.get("up_trend_day_flag")):
+        tags.append("上行趋势日")
+    if bool(label.get("down_trend_day_flag")):
+        tags.append("下行趋势日")
+    if bool(label.get("big_loss_day_flag")):
+        tags.append("大亏日")
+    if bool(label.get("choppy_day_flag")):
+        tags.append("震荡日")
+    tag_text = "、".join(tags) if tags else "普通交易日"
+    return f"收盘后结果：{tag_text}；市场收益 {_format_percent(label.get('market_return'))}。"
 
 
 def _engine_summary_table(scores: pd.DataFrame) -> pd.DataFrame:
@@ -511,6 +654,15 @@ def _trend_label(value: Any) -> str:
         "unclear": "不明确",
     }
     return labels.get(str(value), "N/A")
+
+
+def _direction_label(value: Any) -> str:
+    labels = {
+        "up": "上行",
+        "down": "下行",
+        "flat": "平盘",
+    }
+    return labels.get(str(value), str(value))
 
 
 def _data_mode_label(value: str) -> str:

@@ -28,6 +28,19 @@ RAW_TABLES = [
 ]
 
 
+def default_history_range(
+    years: int = 3,
+    end_date: str | pd.Timestamp | None = None,
+) -> tuple[str, str]:
+    """Return the default trailing history range for snapshot generation."""
+
+    if years <= 0:
+        raise ValueError("years must be positive.")
+    end = _latest_business_day(end_date)
+    start = end - pd.DateOffset(years=years)
+    return str(start.date()), str(end.date())
+
+
 @dataclass(frozen=True)
 class SnapshotInfo:
     path: Path
@@ -55,6 +68,19 @@ def fetch_raw_inputs(
         "overseas_ohlcv": client.get_daily_ohlcv(["SPX.GI", "HSI.HI"], start_date, end_date),
         "ashare_ohlcv": client.get_daily_ohlcv(["000300.SH", "000905.SH", "000852.SH"], start_date, end_date),
     }
+
+
+def _latest_business_day(date_value: str | pd.Timestamp | None = None) -> pd.Timestamp:
+    if date_value is None:
+        value = pd.Timestamp.now(tz="Asia/Shanghai")
+    else:
+        value = pd.Timestamp(date_value)
+    if value.tzinfo is not None:
+        value = value.tz_convert("Asia/Shanghai").tz_localize(None)
+    value = value.normalize()
+    while value.weekday() >= 5:
+        value -= pd.Timedelta(days=1)
+    return value
 
 
 def run_pipeline_from_client(

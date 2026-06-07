@@ -3,11 +3,11 @@
 `daily-bias-engine` is a Python research package for producing a daily
 Risk-On / Neutral / Risk-Off market bias signal from cross-asset factors.
 
-The v1 implementation is intentionally self-contained. It does not call Wind
-yet. Instead, it defines Wind-compatible interfaces, immutable raw snapshot
-caching, deterministic mock data, representative factor calculators, a
-rule-based scoring engine, market result labels, backtest metrics, and a
-Streamlit dashboard.
+The v1 implementation is intentionally self-contained at runtime. It defines
+Wind-compatible interfaces, immutable raw snapshot caching, deterministic mock
+data, representative factor calculators, a rule-based scoring engine, market
+result labels, backtest metrics, and a Streamlit dashboard. WindPy fetching is
+available as an offline snapshot step; the dashboard reads local snapshots.
 
 The current milestone hardens the project as a pre-open market environment
 filter:
@@ -19,9 +19,9 @@ filter:
 - Explanations include top positive and negative drivers plus hard risk flags.
 
 WindPy integration is available through `WindPyDataClient`. The Wind terminal
-must be installed, running, and logged in. Streamlit supports both Wind live mode
-and mock demo mode, but the recommended workflow is to fetch Wind data into a
-local snapshot first and let Streamlit read the snapshot.
+must be installed, running, and logged in. The recommended workflow is to fetch
+Wind data into a local snapshot first and let Streamlit read the snapshot. This
+keeps the long-running dashboard process away from Wind login/session issues.
 
 ## Install
 
@@ -46,6 +46,13 @@ python -m streamlit run apps/streamlit_app.py
 Run this from a normal local PowerShell where the Wind terminal is logged in:
 
 ```bash
+python scripts/fetch_wind_snapshot.py
+```
+
+By default this fetches the trailing three calendar years through the latest
+weekday. You can still override the range:
+
+```bash
 python scripts/fetch_wind_snapshot.py --start 2024-01-01 --end 2024-04-30
 ```
 
@@ -56,7 +63,11 @@ The dashboard reads those local snapshots and does not need to call WindPy from
 the long-running Streamlit process. This is more stable on Windows because Wind
 login context and Streamlit server context can differ.
 
-The dashboard can also run the full pipeline with `MockWindDataClient`:
+The dashboard automatically loads the latest local snapshot. If no snapshot is
+available, it falls back to a trailing three-year `MockWindDataClient` demo. The
+main page uses a signal-date selector instead of sidebar run parameters.
+
+The pipeline can also run with `MockWindDataClient`:
 
 1. Generate deterministic mock OHLCV, futures open interest, and rates data.
 2. Calculate representative v1 factors.
@@ -86,5 +97,5 @@ tests/        pytest coverage
 
 - Implemented: interfaces, mock data, Parquet cache, representative v1 factors,
   scoring, labels, metrics, docs, tests, and Streamlit demo.
-- Not implemented yet: real Wind authentication, WindPy calls, production factor
-  formulas, scheduler, database storage, or execution integration.
+- Not implemented yet: production factor formulas, scheduler, database storage,
+  or execution integration.
