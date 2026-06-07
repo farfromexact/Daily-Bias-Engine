@@ -20,64 +20,46 @@ from daily_bias_engine.backtest import (
     score_bucket_diagnostics,
     trend_probability_bucket_diagnostics,
 )
-from daily_bias_engine.data import MockWindDataClient
 from daily_bias_engine.features import factor_logic_rows
 from daily_bias_engine.pipeline import (
     SnapshotInfo,
-    default_history_range,
     list_snapshots,
-    run_pipeline_from_client,
     run_pipeline_from_snapshot,
 )
+from daily_bias_engine.options.reports.daily_option_state import generate_daily_option_state
 
 CONFIG_DIR = PROJECT_ROOT / "configs"
 SNAPSHOT_ROOT = PROJECT_ROOT / "data" / "snapshots"
+OPTION_DATA_ROOT = PROJECT_ROOT / "data" / "options"
 
 
-def run_demo_pipeline(
-    start_date: str | None = None,
-    end_date: str | None = None,
-    data_mode: str = "mock",
-    snapshot_dir: str | Path | None = None,
-) -> dict[str, Any]:
-    """Run the full pipeline used by Streamlit and smoke tests."""
+def run_dashboard_pipeline(snapshot_dir: str | Path | None = None) -> dict[str, Any]:
+    """Run the dashboard pipeline from a local Wind snapshot only."""
 
-    if data_mode == "snapshot":
-        if snapshot_dir is None:
-            snapshots = list_snapshots(SNAPSHOT_ROOT)
-            if not snapshots:
-                raise FileNotFoundError(f"没有找到本地快照：{SNAPSHOT_ROOT}")
-            snapshot_dir = snapshots[0].path
-        return run_pipeline_from_snapshot(snapshot_dir=snapshot_dir, config_dir=CONFIG_DIR)
+    if snapshot_dir is None:
+        snapshots = list_snapshots(SNAPSHOT_ROOT)
+        if not snapshots:
+            raise FileNotFoundError(f"No local Wind snapshot found under {SNAPSHOT_ROOT}.")
+        snapshot_dir = snapshots[0].path
+    return run_pipeline_from_snapshot(snapshot_dir=snapshot_dir, config_dir=CONFIG_DIR)
 
-    if start_date is None or end_date is None:
-        default_start, default_end = default_history_range()
-        start_date = start_date or default_start
-        end_date = end_date or default_end
 
-    client = MockWindDataClient()
-    return run_pipeline_from_client(
-        client=client,
-        start_date=start_date,
-        end_date=end_date,
-        config_dir=CONFIG_DIR,
-        data_mode="mock",
+@st.cache_data(show_spinner="Loading local Wind snapshot...")
+def _cached_dashboard_result(snapshot_dir: str | None) -> dict[str, Any]:
+    return run_dashboard_pipeline(snapshot_dir=snapshot_dir)
+
+
+@st.cache_data(show_spinner="Loading local option state...")
+def _cached_option_state(product_group: str, trade_date: str, data_root: str) -> tuple[pd.DataFrame, dict[str, Any], dict[str, pd.DataFrame]]:
+    factors, payload, _, plots = generate_daily_option_state(
+        trade_date,
+        product_group,
+        data_root=Path(data_root),
+        include_markdown=False,
+        include_plots=True,
     )
+    return factors, payload, plots or {}
 
-
-@st.cache_data(show_spinner="正在加载本地快照并计算信号...")
-def _cached_dashboard_result(
-    data_mode: str,
-    snapshot_dir: str | None,
-    start_date: str | None,
-    end_date: str | None,
-) -> dict[str, Any]:
-    return run_demo_pipeline(
-        start_date=start_date,
-        end_date=end_date,
-        data_mode=data_mode,
-        snapshot_dir=snapshot_dir,
-    )
 
 
 def main() -> None:
@@ -87,6 +69,9 @@ def main() -> None:
     snapshots = list_snapshots(SNAPSHOT_ROOT)
     snapshot_info = snapshots[0] if snapshots else None
     result, data_warning = _load_dashboard_data(snapshot_info)
+    if result is None:
+        st.error(data_warning)
+        st.stop()
     scores = result["scores"].copy()
     labels = result["labels"].copy()
     factors = result["factors"].copy()
@@ -107,8 +92,8 @@ def main() -> None:
 
     st.caption(_data_status_text(result, snapshot_info, scores))
 
-    overview, factors_tab, engine_tab, labels_tab, backtest_tab, backtest_diagnostics_tab, factor_diagnostics_tab, logic_tab = st.tabs(
-        ["总览", "因子", "引擎", "标签", "回测", "回测诊断", "因子诊断", "逻辑说明"]
+    overview, factors_tab, engine_tab, labels_tab, backtest_tab, backtest_diagnostics_tab, factor_diagnostics_tab, options_tab, logic_tab = st.tabs(
+        ["Overview", "Factors", "Engine", "Labels", "Backtest", "Backtest Diagnostics", "Factor Diagnostics", "Options", "Logic"]
     )
 
     with overview:
@@ -253,6 +238,9 @@ def main() -> None:
         else:
             st.info("当前没有足够数据生成因子五分位表现。")
 
+    with options_tab:
+        _render_options_tab(_available_option_snapshots())
+
     with logic_tab:
         st.subheader("系统如何使用这些因子")
         st.markdown(
@@ -271,26 +259,184 @@ def main() -> None:
         st.dataframe(pd.DataFrame(factor_logic_rows()), width="stretch")
 
 
-def _load_dashboard_data(snapshot_info: SnapshotInfo | None) -> tuple[dict[str, Any], str]:
-    if snapshot_info is not None:
-        try:
-            result = _cached_dashboard_result("snapshot", str(snapshot_info.path), None, None)
-            return result, ""
-        except Exception as exc:
-            start_date, end_date = default_history_range()
-            result = _cached_dashboard_result("mock", None, start_date, end_date)
-            return result, f"本地快照读取失败，已回退到最近三年 Mock 演示：{exc}"
+def _available_option_snapshots(data_root: Path | str = OPTION_DATA_ROOT) -> dict[str, list[str]]:
+    normalized_root = Path(data_root) / "normalized_chain"
+    if not normalized_root.exists():
+        return {}
 
-    start_date, end_date = default_history_range()
-    result = _cached_dashboard_result("mock", None, start_date, end_date)
-    return result, "没有找到本地快照，当前显示最近三年的 Mock 演示。真实数据请先运行 `python scripts/fetch_wind_snapshot.py`。"
+    snapshots: dict[str, list[str]] = {}
+    for product_dir in sorted(normalized_root.glob("product_group=*")):
+        if not product_dir.is_dir():
+            continue
+        product_group = product_dir.name.split("=", 1)[-1].upper()
+        dates = []
+        for date_dir in sorted(product_dir.glob("trade_date=*")):
+            if (date_dir / "data.parquet").exists():
+                dates.append(date_dir.name.split("=", 1)[-1])
+        if dates:
+            snapshots[product_group] = sorted(dates)
+    return snapshots
+
+
+def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
+    st.subheader("Local Option State")
+    st.caption(f"Source: {OPTION_DATA_ROOT / 'normalized_chain'}")
+    if not option_snapshots:
+        st.info(
+            "No local option snapshots found. Run "
+            "`python scripts/fetch_wind_options_snapshot.py --date YYYY-MM-DD --product CSI300` first."
+        )
+        return
+
+    products = sorted(option_snapshots)
+    default_product = products.index("CSI300") if "CSI300" in products else 0
+    controls = st.columns([1, 1, 2])
+    with controls[0]:
+        product_group = st.selectbox("Option product", products, index=default_product)
+    dates = option_snapshots.get(product_group, [])
+    with controls[1]:
+        trade_date = st.selectbox("Trade date", dates, index=len(dates) - 1)
+
+    try:
+        factors, payload, plots = _cached_option_state(product_group, trade_date, str(OPTION_DATA_ROOT))
+    except Exception as exc:
+        st.error(f"Local option state failed: {exc}")
+        return
+
+    overlay = payload.get("recommended_overlay", {})
+    metric_columns = st.columns(6)
+    metric_columns[0].metric("Regime", str(payload.get("regime", "N/A")))
+    metric_columns[1].metric("Direction", _format_float(payload.get("option_direction_score")))
+    metric_columns[2].metric("Risk", _format_float(payload.get("option_risk_score")))
+    metric_columns[3].metric("Vol carry", _format_float(payload.get("vol_carry_score")))
+    metric_columns[4].metric("Tail risk", _format_float(payload.get("tail_risk_score")))
+    metric_columns[5].metric("Beta x", _format_float(overlay.get("beta_multiplier")))
+
+    st.caption(str(payload.get("explanation", "")))
+
+    summary_columns = st.columns(3)
+    with summary_columns[0]:
+        st.subheader("Key Levels")
+        st.dataframe(_option_payload_table(payload.get("key_levels", {})), width="stretch", hide_index=True)
+    with summary_columns[1]:
+        st.subheader("Exposures")
+        st.dataframe(_option_payload_table(payload.get("exposures", {})), width="stretch", hide_index=True)
+    with summary_columns[2]:
+        st.subheader("Vol / Skew")
+        vol_skew = {**payload.get("vol", {}), **payload.get("skew", {})}
+        st.dataframe(_option_payload_table(vol_skew), width="stretch", hide_index=True)
+
+    overlay_table = _option_payload_table(
+        {
+            "allow_short_vol": overlay.get("allow_short_vol"),
+            "prefer_option_structure": overlay.get("prefer_option_structure"),
+        }
+    )
+    st.subheader("Recommended Overlay")
+    st.dataframe(overlay_table, width="stretch", hide_index=True)
+
+    st.subheader("Option Factor Row")
+    st.dataframe(_option_factor_table(factors), width="stretch", hide_index=True)
+
+    chart_columns = st.columns(2)
+    with chart_columns[0]:
+        _render_option_chart("GEX By Strike", plots.get("gex_by_strike"), x_column="strike", y_column="gamma_exposure_1pct", chart="bar")
+    with chart_columns[1]:
+        _render_option_chart("Spot Grid GEX", plots.get("spot_grid_gex"), x_column="spot", y_column="gamma_exposure_1pct", chart="line")
+
+    chart_columns = st.columns(2)
+    with chart_columns[0]:
+        _render_option_chart("IV Term Structure", plots.get("iv_term_structure"), x_column="tenor_days", y_column="atm_iv", chart="line")
+    with chart_columns[1]:
+        _render_option_chart("Skew Curve", plots.get("skew_curve"), x_column="point", y_column="iv", chart="line")
+
+
+def _option_payload_table(values: dict[str, Any]) -> pd.DataFrame:
+    rows = [{"Metric": key, "Value": _option_display_value(value)} for key, value in values.items()]
+    return pd.DataFrame(rows)
+
+
+def _option_display_value(value: Any) -> str:
+    if value is None or (not isinstance(value, bool) and pd.isna(value)):
+        return "N/A"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return f"{float(value):,.3f}"
+    return str(value)
+
+
+def _option_factor_table(factors: pd.DataFrame) -> pd.DataFrame:
+    if factors.empty:
+        return pd.DataFrame()
+    columns = [
+        "date",
+        "product_group",
+        "spot",
+        "gex_z",
+        "vanna_z",
+        "charm_z",
+        "iv_30d",
+        "iv_30d_change",
+        "put_skew_25d",
+        "risk_reversal_25d",
+        "regime",
+        "option_direction_score",
+        "option_risk_score",
+        "recommended_beta_multiplier",
+        "allow_short_vol",
+        "prefer_option_structure",
+    ]
+    existing = [column for column in columns if column in factors.columns]
+    table = factors[existing].copy()
+    for column in ("date", "data_date"):
+        if column in table.columns:
+            table[column] = pd.to_datetime(table[column]).dt.strftime("%Y-%m-%d")
+    return _round_numeric(table)
+
+
+def _render_option_chart(
+    title: str,
+    frame: pd.DataFrame | None,
+    *,
+    x_column: str,
+    y_column: str,
+    chart: str,
+) -> None:
+    st.subheader(title)
+    if frame is None or frame.empty or x_column not in frame.columns or y_column not in frame.columns:
+        st.info("No local plot data available.")
+        return
+
+    chart_data = frame[[x_column, y_column]].dropna().copy()
+    if chart_data.empty:
+        st.info("No local plot data available.")
+        return
+    chart_data = chart_data.set_index(x_column)
+    if chart == "bar":
+        st.bar_chart(chart_data)
+    else:
+        st.line_chart(chart_data)
+    with st.expander(f"{title} data"):
+        st.dataframe(_round_numeric(frame), width="stretch", hide_index=True)
+
+
+def _load_dashboard_data(snapshot_info: SnapshotInfo | None) -> tuple[dict[str, Any] | None, str]:
+    if snapshot_info is None:
+        return None, f"No local Wind snapshot found under {SNAPSHOT_ROOT}. Run `python scripts/fetch_wind_snapshot.py` first."
+    try:
+        result = _cached_dashboard_result(str(snapshot_info.path))
+        return result, ""
+    except Exception as exc:
+        return None, f"Local Wind snapshot read failed: {exc}"
+
 
 
 def _data_status_text(result: dict[str, Any], snapshot_info: SnapshotInfo | None, scores: pd.DataFrame) -> str:
     dates = pd.to_datetime(scores["date"]).dt.strftime("%Y-%m-%d")
     signal_range = f"{dates.min()} 至 {dates.max()}" if not dates.empty else "N/A"
     base = (
-        f"当前数据源：{_data_mode_label(result.get('data_mode', 'mock'))} | "
+        f"当前数据源：{_data_mode_label(result.get('data_mode', 'snapshot'))} | "
         f"信号日期范围：{signal_range} | "
         f"信号日数量：{len(scores)}"
     )
@@ -905,11 +1051,11 @@ def _direction_label(value: Any) -> str:
 
 def _data_mode_label(value: str) -> str:
     labels = {
-        "snapshot": "本地快照",
-        "mock": "Mock 演示",
-        "wind": "Wind 实盘",
+        "snapshot": "Local Wind snapshot",
+        "wind": "Localized Wind data",
     }
     return labels.get(value, value)
+
 
 
 if __name__ == "__main__":

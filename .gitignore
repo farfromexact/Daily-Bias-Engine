@@ -3,6 +3,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .pytest-tmp/
+.pytest-tmp*/
 .venv/
 venv/
 data/raw/
@@ -12,3 +13,4 @@ data/features/
 data/signals/
 data/results/
 .streamlit_logs/
+.streamlit-options.*.log

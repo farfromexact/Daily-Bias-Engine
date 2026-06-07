@@ -3,11 +3,11 @@
 `daily-bias-engine` is a Python research package for producing a daily
 Risk-On / Neutral / Risk-Off market bias signal from cross-asset factors.
 
-The v1 implementation is intentionally self-contained at runtime. It defines
-Wind-compatible interfaces, immutable raw snapshot caching, deterministic mock
-data, representative factor calculators, a rule-based scoring engine, market
-result labels, backtest metrics, and a Streamlit dashboard. WindPy fetching is
-available as an offline snapshot step; the dashboard reads local snapshots.
+The v1 implementation is intentionally snapshot-first at runtime. It defines
+WindPy data fetchers, immutable raw snapshot caching, representative factor
+calculators, a rule-based scoring engine, market result labels, backtest
+metrics, and a Streamlit dashboard. WindPy fetching is an offline/localization
+step; the dashboard and model pipeline read local Parquet snapshots.
 
 The current milestone hardens the project as a pre-open market environment
 filter:
@@ -64,29 +64,37 @@ the long-running Streamlit process. This is more stable on Windows because Wind
 login context and Streamlit server context can differ.
 
 The dashboard automatically loads the latest local snapshot. If no snapshot is
-available, it falls back to a trailing three-year `MockWindDataClient` demo. The
-main page uses a signal-date selector instead of sidebar run parameters.
+available, it stops and asks you to run `python scripts/fetch_wind_snapshot.py`.
+The main page uses a signal-date selector instead of sidebar run parameters.
 
-The pipeline can also run with `MockWindDataClient`:
+For example, if the Wind snapshot ends on `2024-04-30`, the latest pre-open
+signal is dated `2024-05-01` and uses `2024-04-30` as `data_date`.
 
-1. Generate deterministic mock OHLCV, futures open interest, and rates data.
-2. Calculate representative v1 factors.
-3. Score daily market bias using YAML weights and thresholds.
-4. Label realized market outcomes.
-5. Report evaluation metrics.
+## Fetch Wind Option Snapshot
 
-For example, if the mock data ends on `2024-04-30`, the latest pre-open signal
-is dated `2024-05-01` and uses `2024-04-30` as `data_date`.
+Run this from a normal local PowerShell where the Wind terminal is logged in:
+
+```bash
+python scripts/fetch_wind_options_snapshot.py --date 2026-06-07 --product CSI300
+```
+
+The script writes normalized option chains under `data/options/`. Option reports
+read those local Parquet chains:
+
+```bash
+python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-07 --product CSI300
+```
 
 ## Project Layout
 
 ```text
 src/daily_bias_engine/
-  data/       WindDataClient interface, mock client, raw cache
+  data/       WindDataClient interface, WindPy client, raw cache
   features/   representative factor calculators
   engine/     rule-based Daily Bias Engine
   labeling/   market result labels
   backtest/   evaluation metrics
+  options/    localized A-share index option state layer
   report/     report helpers
 apps/         Streamlit dashboard
 configs/      YAML weights, thresholds, data config
@@ -95,7 +103,8 @@ tests/        pytest coverage
 
 ## Current Scope
 
-- Implemented: interfaces, mock data, Parquet cache, representative v1 factors,
-  scoring, labels, metrics, docs, tests, and Streamlit demo.
+- Implemented: WindPy interfaces, Parquet cache, representative v1 factors,
+  scoring, labels, metrics, docs, tests, Streamlit dashboard, and option state
+  layer.
 - Not implemented yet: production factor formulas, scheduler, database storage,
   or execution integration.

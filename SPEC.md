@@ -82,10 +82,10 @@ Explanation includes:
 - `get_futures_open_interest(symbols, start_date, end_date)`
 - `get_interest_rates(series, start_date, end_date)`
 
-`MockWindDataClient` implements the interface with deterministic synthetic data.
-`WindPyDataClient` implements the same interface through WindPy. The Wind
-terminal must be installed, running, and logged in before live data calls can
-succeed.
+`WindPyDataClient` implements the interface through WindPy. The Wind terminal
+must be installed, running, and logged in before data localization calls can
+succeed. Dashboard and model processes should read local snapshots rather than
+calling WindPy directly.
 
 ## Raw Snapshot Cache
 

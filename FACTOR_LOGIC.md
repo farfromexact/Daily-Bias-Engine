@@ -4,7 +4,7 @@
 
 ## 总体流程
 
-1. 使用 Wind 或 Mock 获取日频数据。
+1. 使用 Wind 或 Wind snapshot 获取日频数据。
 2. 每个原始因子先计算 `raw_value`。
 3. 对 `raw_value` 做 20 日滚动 z-score，至少 3 个样本。
 4. 将 z-score 按方向映射到 `directional_score`：
@@ -34,7 +34,7 @@
 
 ## 真实数据与 proxy 的区别
 
-当前最新快照来自真实 Wind 数据。文档或界面里出现的 `proxy` 不是指数据是 Mock，
+当前最新快照来自真实 Wind 数据。文档或界面里出现的 `proxy` 不是指数据是 Wind snapshot，
 而是指某些因子暂时使用“替代口径”表达目标变量。
 
 例如：

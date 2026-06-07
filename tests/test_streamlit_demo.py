@@ -1,23 +1,34 @@
-from apps.streamlit_app import run_demo_pipeline
-from daily_bias_engine.pipeline import save_snapshot
+import pytest
+
+from apps.streamlit_app import CONFIG_DIR, _available_option_snapshots, run_dashboard_pipeline
+from daily_bias_engine.pipeline import run_pipeline_from_raw, save_snapshot
+from tests.fixtures import raw_wind_like_inputs
 
 
-def test_streamlit_demo_pipeline_runs_without_launching_ui() -> None:
-    result = run_demo_pipeline("2024-01-01", "2024-02-29")
-
-    assert not result["factors"].empty
-    assert not result["scores"].empty
-    assert not result["labels"].empty
-    assert result["metrics"]["observations"] > 0
-    assert result["report"]["latest"]["bias_label"] in {"Risk-On", "Neutral", "Risk-Off"}
-
-
-def test_streamlit_pipeline_can_read_local_snapshot(tmp_path) -> None:
-    result = run_demo_pipeline("2024-01-01", "2024-02-29")
-    snapshot_dir = save_snapshot(result, tmp_path, source="mock", start_date="2024-01-01", end_date="2024-02-29")
-
-    loaded = run_demo_pipeline(data_mode="snapshot", snapshot_dir=snapshot_dir)
+def test_streamlit_pipeline_reads_local_snapshot_without_launching_ui(tmp_path) -> None:
+    result = run_pipeline_from_raw(raw_wind_like_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="snapshot")
+    snapshot_dir = save_snapshot(result, tmp_path, source="wind_fixture", start_date="2024-01-01", end_date="2024-02-29")
+    loaded = run_dashboard_pipeline(snapshot_dir=snapshot_dir)
 
     assert not loaded["factors"].empty
-    assert loaded["data_mode"] == "snapshot"
-    assert loaded["report"]["latest"]["date"] == result["report"]["latest"]["date"]
+    assert not loaded["scores"].empty
+    assert not loaded["labels"].empty
+    assert loaded["metrics"]["observations"] > 0
+    assert loaded["report"]["latest"]["bias_label"] in {"Risk-On", "Neutral", "Risk-Off"}
+
+
+def test_streamlit_pipeline_requires_local_snapshot(tmp_path, monkeypatch) -> None:
+    import apps.streamlit_app as streamlit_app
+
+    monkeypatch.setattr(streamlit_app, "SNAPSHOT_ROOT", tmp_path)
+
+    with pytest.raises(FileNotFoundError, match="No local Wind snapshot"):
+        streamlit_app.run_dashboard_pipeline()
+
+
+def test_streamlit_lists_local_option_snapshots(tmp_path) -> None:
+    snapshot_file = tmp_path / "normalized_chain" / "product_group=CSI300" / "trade_date=2026-06-05" / "data.parquet"
+    snapshot_file.parent.mkdir(parents=True)
+    snapshot_file.write_bytes(b"local parquet marker")
+
+    assert _available_option_snapshots(tmp_path) == {"CSI300": ["2026-06-05"]}

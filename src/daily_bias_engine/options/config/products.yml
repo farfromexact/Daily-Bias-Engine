@@ -1,0 +1,73 @@
+products:
+  SSE50:
+    display_name: "SSE50"
+    chinese_name: "上证50"
+    instruments:
+      - venue: "SSE"
+        option_product_code: "510050"
+        underlying_code: "510050.SH"
+        reference_index_code: "000016.SH"
+        hedge_future_prefix: "IH"
+        underlying_type: "ETF"
+        default_multiplier: 10000
+        settlement_type: "physical"
+        option_style: "European"
+        default_expiry_rule: "fourth Wednesday of expiry month"
+      - venue: "CFFEX"
+        option_product_code: "HO"
+        underlying_code: "000016.SH"
+        reference_index_code: "000016.SH"
+        hedge_future_prefix: "IH"
+        underlying_type: "index"
+        default_multiplier: 100
+        settlement_type: "cash"
+        option_style: "European"
+        default_expiry_rule: "third Friday of expiry month"
+  CSI300:
+    display_name: "CSI300"
+    chinese_name: "沪深300"
+    instruments:
+      - venue: "SSE"
+        option_product_code: "510300"
+        underlying_code: "510300.SH"
+        reference_index_code: "000300.SH"
+        hedge_future_prefix: "IF"
+        underlying_type: "ETF"
+        default_multiplier: 10000
+        settlement_type: "physical"
+        option_style: "European"
+        default_expiry_rule: "fourth Wednesday of expiry month"
+      - venue: "SZSE"
+        option_product_code: "159919"
+        underlying_code: "159919.SZ"
+        reference_index_code: "000300.SH"
+        hedge_future_prefix: "IF"
+        underlying_type: "ETF"
+        default_multiplier: 10000
+        settlement_type: "physical"
+        option_style: "European"
+        default_expiry_rule: "fourth Wednesday of expiry month"
+      - venue: "CFFEX"
+        option_product_code: "IO"
+        underlying_code: "000300.SH"
+        reference_index_code: "000300.SH"
+        hedge_future_prefix: "IF"
+        underlying_type: "index"
+        default_multiplier: 100
+        settlement_type: "cash"
+        option_style: "European"
+        default_expiry_rule: "third Friday of expiry month"
+  CSI1000:
+    display_name: "CSI1000"
+    chinese_name: "中证1000"
+    instruments:
+      - venue: "CFFEX"
+        option_product_code: "MO"
+        underlying_code: "000852.SH"
+        reference_index_code: "000852.SH"
+        hedge_future_prefix: "IM"
+        underlying_type: "index"
+        default_multiplier: 100
+        settlement_type: "cash"
+        option_style: "European"
+        default_expiry_rule: "third Friday of expiry month"

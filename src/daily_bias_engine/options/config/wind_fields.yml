@@ -1,0 +1,31 @@
+option_contract_fields:
+  option_code: "wind_code"
+  option_type: "call_or_put"
+  strike: "exercise_price"
+  expiry_date: "expire_date"
+  multiplier_or_contract_unit: "contract_unit"
+  adjusted_contract_flag: "is_adjusted"
+
+option_eod_fields:
+  open: "open"
+  high: "high"
+  low: "low"
+  close: "close"
+  settle: "settle"
+  volume: "volume"
+  open_interest: "oi"
+  bid: "bid1"
+  ask: "ask1"
+  implied_vol: "imp_vol"
+
+underlying_eod_fields:
+  open: "open"
+  high: "high"
+  low: "low"
+  close: "close"
+  volume: "volume"
+  amount: "amt"
+
+rates:
+  risk_free_rate: "SHIBOR1W.IR"
+  dividend_yield: null

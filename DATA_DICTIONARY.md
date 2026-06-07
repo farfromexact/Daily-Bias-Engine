@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | `date` | date | Source observation date. |
 | `asof_time` | string | Time the source data was known. |
-| `source` | string | Data source, for example `mock` or `wind`. |
+| `source` | string | Data source, normally `wind` for localized Wind snapshots. |
 | `symbol` | string | Instrument code. |
 | `open` | float | Daily open price. |
 | `high` | float | Daily high price. |
