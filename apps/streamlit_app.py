@@ -151,6 +151,10 @@ def main() -> None:
             引擎按配置权重加权得到 `-100` 到 `+100` 的总分。
 
             日收盘数据只生成下一交易日的开盘前信号，因此表里的 `data_date` 必须早于 `date`。
+
+            **注意：当前快照可以是真实 Wind 数据。这里的 proxy 通常指“因子口径是替代变量”，
+            不是说底层行情是假数据。** 例如 ETF 成交额是真实 Wind 数据，但它只是 ETF 净申购的
+            proxy；指数样本上涨比例是真实 Wind 价格派生结果，但它只是全市场上涨家数的 proxy。
             """
         )
         st.dataframe(pd.DataFrame(factor_logic_rows()), use_container_width=True)

@@ -21,5 +21,5 @@ def test_factor_logic_rows_are_reader_facing() -> None:
     rows = factor_logic_rows()
 
     assert len(rows) == 10
-    required = {"factor_name", "group", "raw_formula", "normalization", "direction", "caveat"}
+    required = {"factor_name", "group", "data_source", "raw_formula", "normalization", "direction", "caveat"}
     assert all(required.issubset(row) for row in rows)
