@@ -14,6 +14,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from daily_bias_engine.data import MockWindDataClient
+from daily_bias_engine.features import factor_logic_rows
 from daily_bias_engine.pipeline import (
     list_snapshots,
     run_pipeline_from_client,
@@ -95,8 +96,8 @@ def main() -> None:
         st.warning(st.session_state["data_warning"])
     st.caption(f"当前数据源：{_data_mode_label(result.get('data_mode', 'mock'))}")
 
-    overview, factors_tab, engine_tab, labels_tab, backtest_tab = st.tabs(
-        ["总览", "因子", "引擎", "标签", "回测"]
+    overview, factors_tab, engine_tab, labels_tab, backtest_tab, logic_tab = st.tabs(
+        ["总览", "因子", "引擎", "标签", "回测", "逻辑说明"]
     )
 
     with overview:
@@ -140,6 +141,19 @@ def main() -> None:
 
     with backtest_tab:
         st.json(metrics)
+
+    with logic_tab:
+        st.subheader("系统如何使用这些因子")
+        st.markdown(
+            """
+            当前版本是规则引擎，不是机器学习模型。每个因子先计算原始值，再做 20 日滚动 z-score，
+            然后按风险方向映射成 `directional_score`。最终因子得分为 `directional_score * 100`，
+            引擎按配置权重加权得到 `-100` 到 `+100` 的总分。
+
+            日收盘数据只生成下一交易日的开盘前信号，因此表里的 `data_date` 必须早于 `date`。
+            """
+        )
+        st.dataframe(pd.DataFrame(factor_logic_rows()), use_container_width=True)
 
 
 def _format_float(value: Any) -> str:

@@ -9,6 +9,7 @@ from daily_bias_engine.features.calculators import (
     calculate_rates_and_bond_futures,
 )
 from daily_bias_engine.features.asof import validate_premarket_asof
+from daily_bias_engine.features.logic import factor_logic_rows
 
 __all__ = [
     "calculate_all_features",
@@ -17,5 +18,6 @@ __all__ = [
     "calculate_etf_and_margin_flow",
     "calculate_overseas_market",
     "calculate_rates_and_bond_futures",
+    "factor_logic_rows",
     "validate_premarket_asof",
 ]
