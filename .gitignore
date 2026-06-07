@@ -6,4 +6,9 @@ __pycache__/
 .venv/
 venv/
 data/raw/
+data/snapshots/
+data/processed/
+data/features/
+data/signals/
+data/results/
 .streamlit_logs/

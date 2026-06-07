@@ -1,4 +1,4 @@
-"""Streamlit dashboard for the Daily Bias Engine MVP."""
+"""Streamlit dashboard for the Daily Bias Engine."""
 
 from __future__ import annotations
 
@@ -7,77 +7,47 @@ import sys
 from typing import Any
 
 import pandas as pd
-import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from daily_bias_engine.backtest import evaluate_bias_predictions
-from daily_bias_engine.data import MockWindDataClient, RawDataCache, WindDataError, WindPyDataClient
-from daily_bias_engine.engine import DailyBiasEngine
-from daily_bias_engine.features import calculate_all_features
-from daily_bias_engine.labeling import label_market_results
-from daily_bias_engine.report import build_daily_report
+from daily_bias_engine.data import MockWindDataClient
+from daily_bias_engine.pipeline import (
+    list_snapshots,
+    run_pipeline_from_client,
+    run_pipeline_from_snapshot,
+)
 
 CONFIG_DIR = PROJECT_ROOT / "configs"
+SNAPSHOT_ROOT = PROJECT_ROOT / "data" / "snapshots"
 
 
 def run_demo_pipeline(
     start_date: str = "2024-01-01",
     end_date: str = "2024-04-30",
     data_mode: str = "mock",
+    snapshot_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """Run the full pipeline used by Streamlit and smoke tests."""
 
-    client = _make_client(data_mode)
-    index_ohlcv = client.get_daily_ohlcv(["000300.SH"], start_date, end_date)
-    futures_ohlcv = client.get_daily_ohlcv(["IF.CFE"], start_date, end_date)
-    open_interest = client.get_futures_open_interest(["IF.CFE"], start_date, end_date)
-    rates = client.get_interest_rates(["DR007.IB", "CGB10Y.IB"], start_date, end_date)
-    etf_flow = _with_margin_balance(
-        client.get_daily_ohlcv(["510300.SH", "510500.SH"], start_date, end_date)
+    if data_mode == "snapshot":
+        if snapshot_dir is None:
+            snapshots = list_snapshots(SNAPSHOT_ROOT)
+            if not snapshots:
+                raise FileNotFoundError(f"没有找到本地快照：{SNAPSHOT_ROOT}")
+            snapshot_dir = snapshots[0].path
+        return run_pipeline_from_snapshot(snapshot_dir=snapshot_dir, config_dir=CONFIG_DIR)
+
+    client = MockWindDataClient()
+    return run_pipeline_from_client(
+        client=client,
+        start_date=start_date,
+        end_date=end_date,
+        config_dir=CONFIG_DIR,
+        data_mode="mock",
     )
-    overseas_ohlcv = client.get_daily_ohlcv(["SPX.GI", "HSI.HI"], start_date, end_date)
-    ashare_ohlcv = client.get_daily_ohlcv(["000300.SH", "000905.SH", "000852.SH"], start_date, end_date)
-
-    factors = calculate_all_features(
-        index_ohlcv=index_ohlcv,
-        futures_ohlcv=futures_ohlcv,
-        open_interest=open_interest,
-        rates=rates,
-        etf_flow=etf_flow,
-        overseas_ohlcv=overseas_ohlcv,
-        ashare_ohlcv=ashare_ohlcv,
-    )
-    engine = DailyBiasEngine.from_yaml(CONFIG_DIR / "factor_weights.yaml", CONFIG_DIR / "thresholds.yaml")
-    scores = engine.score(factors)
-
-    labeling_config = _load_yaml(CONFIG_DIR / "thresholds.yaml").get("labeling", {})
-    labels = label_market_results(index_ohlcv, symbol="000300.SH", **labeling_config)
-
-    backtest_config = _load_yaml(CONFIG_DIR / "thresholds.yaml").get("backtest", {})
-    metrics = evaluate_bias_predictions(scores, labels, **backtest_config)
-    report = build_daily_report(factors=factors, engine_output=scores, labels=labels, metrics=metrics)
-
-    return {
-        "factors": factors,
-        "scores": scores,
-        "labels": labels,
-        "metrics": metrics,
-        "report": report,
-        "data_mode": data_mode,
-        "raw": {
-            "index_ohlcv": index_ohlcv,
-            "futures_ohlcv": futures_ohlcv,
-            "open_interest": open_interest,
-            "rates": rates,
-            "etf_flow": etf_flow,
-            "overseas_ohlcv": overseas_ohlcv,
-            "ashare_ohlcv": ashare_ohlcv,
-        },
-    }
 
 
 def main() -> None:
@@ -86,21 +56,37 @@ def main() -> None:
     st.set_page_config(page_title="市场风向机", layout="wide")
     st.title("市场风向机 / Daily Bias Engine")
 
+    snapshots = list_snapshots(SNAPSHOT_ROOT)
+    default_mode = "本地快照" if snapshots else "Mock 演示"
+
     with st.sidebar:
         st.header("运行参数")
-        data_mode_label = st.radio("数据源", ["Wind 实盘", "Mock 演示"], horizontal=False)
-        data_mode = "wind" if data_mode_label == "Wind 实盘" else "mock"
-        start_date = st.date_input("开始日期", value=pd.Timestamp("2024-01-01"))
-        end_date = st.date_input("结束日期", value=pd.Timestamp("2024-04-30"))
+        data_mode_label = st.radio("数据源", ["本地快照", "Mock 演示"], index=0 if default_mode == "本地快照" else 1)
+        selected_snapshot = None
+        if data_mode_label == "本地快照":
+            if snapshots:
+                snapshot_labels = [item.label for item in snapshots]
+                selected_label = st.selectbox("快照", snapshot_labels)
+                selected_snapshot = snapshots[snapshot_labels.index(selected_label)].path
+                st.caption("Wind 数据请先用脚本抓取到本地快照，页面只负责读取。")
+            else:
+                st.warning("还没有本地快照。请先运行 scripts/fetch_wind_snapshot.py。")
+
+        start_date = st.date_input("开始日期", value=pd.Timestamp("2024-01-01"), disabled=data_mode_label == "本地快照")
+        end_date = st.date_input("结束日期", value=pd.Timestamp("2024-04-30"), disabled=data_mode_label == "本地快照")
         run_button = st.button("运行", type="primary")
 
     if run_button or "demo_result" not in st.session_state:
         try:
-            st.session_state["demo_result"] = run_demo_pipeline(str(start_date), str(end_date), data_mode=data_mode)
-            st.session_state["data_warning"] = ""
-        except WindDataError as exc:
+            if data_mode_label == "本地快照":
+                st.session_state["demo_result"] = run_demo_pipeline(data_mode="snapshot", snapshot_dir=selected_snapshot)
+                st.session_state["data_warning"] = ""
+            else:
+                st.session_state["demo_result"] = run_demo_pipeline(str(start_date), str(end_date), data_mode="mock")
+                st.session_state["data_warning"] = ""
+        except Exception as exc:
             st.session_state["demo_result"] = run_demo_pipeline(str(start_date), str(end_date), data_mode="mock")
-            st.session_state["data_warning"] = f"Wind 数据连接失败，已回退到 Mock 演示：{exc}"
+            st.session_state["data_warning"] = f"本地快照读取失败，已回退到 Mock 演示：{exc}"
 
     result = st.session_state["demo_result"]
     latest = result["report"]["latest"]
@@ -156,26 +142,6 @@ def main() -> None:
         st.json(metrics)
 
 
-def _with_margin_balance(frame: pd.DataFrame) -> pd.DataFrame:
-    output = frame.copy()
-    output["date"] = pd.to_datetime(output["date"]).dt.normalize()
-    daily_amount = output.groupby("date")["amount"].transform("mean")
-    rank = output.groupby("symbol").cumcount()
-    output["margin_balance"] = daily_amount * (1.2 + rank * 0.002)
-    return output
-
-
-def _make_client(data_mode: str) -> MockWindDataClient | WindPyDataClient:
-    if data_mode == "wind":
-        return WindPyDataClient(cache=RawDataCache(PROJECT_ROOT / "data" / "raw" / "wind"))
-    return MockWindDataClient()
-
-
-def _load_yaml(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return yaml.safe_load(handle) or {}
-
-
 def _format_float(value: Any) -> str:
     if value is None:
         return "N/A"
@@ -216,7 +182,12 @@ def _trend_label(value: Any) -> str:
 
 
 def _data_mode_label(value: str) -> str:
-    return "Wind 实盘" if value == "wind" else "Mock 演示"
+    labels = {
+        "snapshot": "本地快照",
+        "mock": "Mock 演示",
+        "wind": "Wind 实盘",
+    }
+    return labels.get(value, value)
 
 
 if __name__ == "__main__":

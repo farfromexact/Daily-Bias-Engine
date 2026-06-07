@@ -20,8 +20,8 @@ filter:
 
 WindPy integration is available through `WindPyDataClient`. The Wind terminal
 must be installed, running, and logged in. Streamlit supports both Wind live mode
-and mock demo mode; when Wind login fails, the dashboard falls back to mock data
-with a warning.
+and mock demo mode, but the recommended workflow is to fetch Wind data into a
+local snapshot first and let Streamlit read the snapshot.
 
 ## Install
 
@@ -41,8 +41,22 @@ pytest
 python -m streamlit run apps/streamlit_app.py
 ```
 
-The dashboard can run the full pipeline with either `WindPyDataClient` or
-`MockWindDataClient`:
+## Fetch Wind Snapshot
+
+Run this from a normal local PowerShell where the Wind terminal is logged in:
+
+```bash
+python scripts/fetch_wind_snapshot.py --start 2024-01-01 --end 2024-04-30
+```
+
+The script writes Parquet snapshots under `data/snapshots/`. These local market
+data files are ignored by Git.
+
+The dashboard reads those local snapshots and does not need to call WindPy from
+the long-running Streamlit process. This is more stable on Windows because Wind
+login context and Streamlit server context can differ.
+
+The dashboard can also run the full pipeline with `MockWindDataClient`:
 
 1. Generate deterministic mock OHLCV, futures open interest, and rates data.
 2. Calculate representative v1 factors.
