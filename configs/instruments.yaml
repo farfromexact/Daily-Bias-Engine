@@ -1,0 +1,33 @@
+equity_indices:
+  csi300: "000300.SH"
+  csi500: "000905.SH"
+  csi1000: "000852.SH"
+  sse50: "000016.SH"
+
+index_futures:
+  IF: "IF.CFE"
+  IH: "IH.CFE"
+  IC: "IC.CFE"
+  IM: "IM.CFE"
+
+bond_futures:
+  TS: "TS.CFE"
+  TF: "TF.CFE"
+  T: "T.CFE"
+  TL: "TL.CFE"
+
+rates:
+  overnight_repo: "DR007.IB"
+  ten_year_cgb: "CGB10Y.IB"
+
+overseas:
+  spx: "SPX.GI"
+  nasdaq: "IXIC.GI"
+  hsi: "HSI.HI"
+  a50_night: "CN00Y.CFE"
+  vix: "VIX.GI"
+  usd_cnh: "USDCNH.FX"
+
+etf_flow:
+  csi300_etf: "510300.SH"
+  csi500_etf: "510500.SH"

@@ -1,0 +1,30 @@
+bias:
+  risk_on: 30
+  risk_off: -30
+
+trend_day_probability:
+  intercept: 35
+  score_slope: 55
+  min: 5
+  max: 95
+
+risk_flags:
+  hard_risk_off_min_flags: 1
+  hard_risk_off_factors:
+    overseas_market_momentum: -70
+    overseas_volatility_pressure: -70
+    equity_index_futures_basis: -70
+    ashare_breadth_proxy: -70
+
+labeling:
+  trend_body_ratio_threshold: 0.60
+  trend_range_quantile: 0.60
+  close_location_threshold: 0.20
+  big_loss_threshold: -0.015
+  tail_loss_quantile: 0.10
+  choppy_return_abs_max: 0.003
+  choppy_range_min: 0.01
+
+backtest:
+  predicted_trend_probability: 60
+  neutral_return_abs_max: 0.003

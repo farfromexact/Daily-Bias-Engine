@@ -1,0 +1,11 @@
+calendar:
+  exchange: "SSE"
+  timezone: "Asia/Shanghai"
+  signal_time: "09:20:00"
+  market_open: "09:30:00"
+  market_close: "15:00:00"
+
+asof_policy:
+  premarket_signal_uses_prior_trading_day: true
+  require_data_date_before_signal_date: true
+  default_raw_asof_time: "16:30:00"

@@ -1,0 +1,23 @@
+weights:
+  equity_index_futures_basis: 0.15
+  futures_open_interest_momentum: 0.10
+  rates_change_5d: 0.10
+  yield_curve_slope: 0.10
+  etf_flow_proxy: 0.10
+  margin_balance_momentum: 0.10
+  overseas_market_momentum: 0.12
+  overseas_volatility_pressure: 0.08
+  ashare_breadth_proxy: 0.09
+  ashare_turnover_momentum: 0.06
+
+groups:
+  equity_index_futures_basis: equity_index_futures
+  futures_open_interest_momentum: equity_index_futures
+  rates_change_5d: rates_and_bond_futures
+  yield_curve_slope: rates_and_bond_futures
+  etf_flow_proxy: etf_and_margin_flow
+  margin_balance_momentum: etf_and_margin_flow
+  overseas_market_momentum: overseas_market
+  overseas_volatility_pressure: overseas_market
+  ashare_breadth_proxy: ashare_market_structure
+  ashare_turnover_momentum: ashare_market_structure
