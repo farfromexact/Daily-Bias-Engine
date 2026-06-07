@@ -14,6 +14,12 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from daily_bias_engine.backtest import (
+    bias_return_diagnostics,
+    factor_diagnostics,
+    score_bucket_diagnostics,
+    trend_probability_bucket_diagnostics,
+)
 from daily_bias_engine.data import MockWindDataClient
 from daily_bias_engine.features import factor_logic_rows
 from daily_bias_engine.pipeline import (
@@ -101,8 +107,8 @@ def main() -> None:
 
     st.caption(_data_status_text(result, snapshot_info, scores))
 
-    overview, factors_tab, engine_tab, labels_tab, backtest_tab, logic_tab = st.tabs(
-        ["总览", "因子", "引擎", "标签", "回测", "逻辑说明"]
+    overview, factors_tab, engine_tab, labels_tab, backtest_tab, backtest_diagnostics_tab, factor_diagnostics_tab, logic_tab = st.tabs(
+        ["总览", "因子", "引擎", "标签", "回测", "回测诊断", "因子诊断", "逻辑说明"]
     )
 
     with overview:
@@ -116,6 +122,11 @@ def main() -> None:
 
         st.subheader("每日环境卡片")
         st.write(_trading_posture(selected_row))
+
+        override = _override_summary_table(selected_row)
+        if not override.empty:
+            st.subheader("风险覆盖")
+            st.dataframe(override, width="stretch", hide_index=True)
 
         label_text = _label_summary_text(selected_label)
         if label_text:
@@ -208,6 +219,40 @@ def main() -> None:
         st.subheader("逐日复盘")
         st.dataframe(_backtest_review_table(scores, labels), width="stretch", hide_index=True)
 
+    with backtest_diagnostics_tab:
+        st.subheader("按最终风向分组")
+        st.caption("这些统计只把开盘前信号与同一信号日收盘后的 realized label 对齐，不会回灌到因子生成。")
+        st.dataframe(_bias_diagnostics_table(bias_return_diagnostics(scores, labels)), width="stretch", hide_index=True)
+
+        st.subheader("总分分桶")
+        st.dataframe(_score_bucket_table(score_bucket_diagnostics(scores, labels)), width="stretch", hide_index=True)
+
+        st.subheader("趋势概率分桶")
+        st.dataframe(
+            _trend_probability_bucket_table(trend_probability_bucket_diagnostics(scores, labels)),
+            width="stretch",
+            hide_index=True,
+        )
+
+    with factor_diagnostics_tab:
+        diagnostics = factor_diagnostics(factors, labels)
+        factor_summary = diagnostics["summary"]
+        quintiles = diagnostics["quintiles"]
+
+        st.subheader("因子诊断")
+        sort_mode = st.selectbox(
+            "排序方式",
+            ["大亏识别最强", "方向收益关系最强", "关系最弱或反向"],
+        )
+        st.dataframe(_factor_diagnostics_table(factor_summary, sort_mode), width="stretch", hide_index=True)
+
+        factor_options = sorted(quintiles["factor_name"].dropna().unique().tolist()) if not quintiles.empty else []
+        if factor_options:
+            selected_factor = st.selectbox("查看五分位表现", factor_options)
+            st.dataframe(_factor_quintile_table(quintiles, selected_factor), width="stretch", hide_index=True)
+        else:
+            st.info("当前没有足够数据生成因子五分位表现。")
+
     with logic_tab:
         st.subheader("系统如何使用这些因子")
         st.markdown(
@@ -278,12 +323,14 @@ def _factor_rows_for_date(factors: pd.DataFrame, selected_date: str) -> pd.DataF
 
 
 def _factor_display_table(factors: pd.DataFrame) -> pd.DataFrame:
-    columns = ["信号日期", "数据日期", "因子", "模块", "原始值", "z-score", "方向分", "可用时间"]
+    columns = ["信号日期", "数据日期", "因子", "模块", "数据源", "原始值", "z-score", "方向分", "可用时间"]
     if factors.empty:
         return pd.DataFrame(columns=columns)
     logic_groups = {row["factor_name"]: row["group"] for row in factor_logic_rows()}
     table = factors.copy()
     table["group"] = table["factor_name"].map(logic_groups).fillna("未分组")
+    if "data_source" not in table.columns:
+        table["data_source"] = ""
     table["date"] = pd.to_datetime(table["date"]).dt.strftime("%Y-%m-%d")
     table["data_date"] = pd.to_datetime(table["data_date"]).dt.strftime("%Y-%m-%d")
     table = table.rename(
@@ -292,6 +339,7 @@ def _factor_display_table(factors: pd.DataFrame) -> pd.DataFrame:
             "data_date": "数据日期",
             "factor_name": "因子",
             "group": "模块",
+            "data_source": "数据源",
             "raw_value": "原始值",
             "zscore_value": "z-score",
             "directional_score": "方向分",
@@ -356,30 +404,199 @@ def _label_summary_text(label: dict[str, Any]) -> str:
     return f"收盘后结果：{tag_text}；市场收益 {_format_percent(label.get('market_return'))}。"
 
 
-def _engine_summary_table(scores: pd.DataFrame) -> pd.DataFrame:
-    table = scores[
+def _override_summary_table(row: dict[str, Any]) -> pd.DataFrame:
+    if not row:
+        return pd.DataFrame()
+    raw_bias = row.get("raw_score_bias") or _raw_score_bias(row.get("total_score"))
+    final_bias = row.get("final_bias") or row.get("bias_label")
+    risk_override = row.get("risk_override") or ""
+    if raw_bias == final_bias or not risk_override:
+        return pd.DataFrame()
+    return pd.DataFrame(
         [
-            "date",
-            "bias_label",
-            "total_score",
-            "confidence",
-            "trend_day_probability",
-            "trend_direction_bias",
+            {
+                "Raw Score Bias": _bias_label(raw_bias),
+                "Risk Override": risk_override,
+                "Final Bias": _bias_label(final_bias),
+                "Override Reason": row.get("override_reason") or _override_reason_from_flags(row.get("risk_flags_json", [])),
+            }
         ]
-    ].copy()
+    )
+
+
+def _bias_diagnostics_table(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(
+            columns=["最终风向", "样本数", "平均收益", "中位数收益", "胜率", "大涨日率", "大亏日率", "趋势日率", "最大亏损"]
+        )
+    table = frame.copy()
+    table["final_bias"] = table["final_bias"].map(_bias_label)
+    table = _format_diagnostic_percentages(table)
+    return table.rename(
+        columns={
+            "final_bias": "最终风向",
+            "sample_count": "样本数",
+            "mean_market_return": "平均收益",
+            "median_market_return": "中位数收益",
+            "win_rate": "胜率",
+            "big_up_day_rate": "大涨日率",
+            "big_loss_day_rate": "大亏日率",
+            "trend_day_rate": "趋势日率",
+            "max_loss": "最大亏损",
+        }
+    )
+
+
+def _score_bucket_table(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(
+            columns=["总分区间", "样本数", "平均收益", "中位数收益", "胜率", "大涨日率", "大亏日率", "趋势日率", "最大亏损"]
+        )
+    table = _format_diagnostic_percentages(frame.copy())
+    return table.rename(
+        columns={
+            "score_bucket": "总分区间",
+            "sample_count": "样本数",
+            "mean_market_return": "平均收益",
+            "median_market_return": "中位数收益",
+            "win_rate": "胜率",
+            "big_up_day_rate": "大涨日率",
+            "big_loss_day_rate": "大亏日率",
+            "trend_day_rate": "趋势日率",
+            "max_loss": "最大亏损",
+        }
+    )
+
+
+def _trend_probability_bucket_table(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(columns=["趋势概率区间", "样本数", "实际趋势日率"])
+    table = frame.copy()
+    table["actual_trend_day_rate"] = table["actual_trend_day_rate"].map(_format_percent)
+    return table.rename(
+        columns={
+            "trend_probability_bucket": "趋势概率区间",
+            "sample_count": "样本数",
+            "actual_trend_day_rate": "实际趋势日率",
+        }
+    )
+
+
+def _factor_diagnostics_table(frame: pd.DataFrame, sort_mode: str) -> pd.DataFrame:
+    columns = [
+        "因子",
+        "样本数",
+        "平均方向分",
+        "收益相关性",
+        "大亏相关性",
+        "趋势日相关性",
+        "大亏识别分",
+        "方向关系强度",
+        "近60日收益相关",
+        "近120日收益相关",
+    ]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    table = frame.copy()
+    if sort_mode == "方向收益关系最强":
+        table = table.sort_values("directional_relationship_strength", ascending=False)
+    elif sort_mode == "关系最弱或反向":
+        table = table.assign(_weakness=table["directional_relationship_strength"].abs()).sort_values(
+            ["corr_next_market_return", "_weakness"],
+            ascending=[True, True],
+        )
+    else:
+        table = table.sort_values("big_loss_detection_score", ascending=False)
+    table = table.drop(columns=["_weakness"], errors="ignore")
+    table = table.rename(
+        columns={
+            "factor_name": "因子",
+            "sample_count": "样本数",
+            "mean_directional_score": "平均方向分",
+            "corr_next_market_return": "收益相关性",
+            "corr_big_loss_day_flag": "大亏相关性",
+            "corr_trend_day_flag": "趋势日相关性",
+            "big_loss_detection_score": "大亏识别分",
+            "directional_relationship_strength": "方向关系强度",
+            "recent_60d_corr_return": "近60日收益相关",
+            "recent_120d_corr_return": "近120日收益相关",
+        }
+    )
+    return _round_numeric(table[columns])
+
+
+def _factor_quintile_table(quintiles: pd.DataFrame, factor_name: str) -> pd.DataFrame:
+    table = quintiles[quintiles["factor_name"] == factor_name].copy()
+    if table.empty:
+        return pd.DataFrame(columns=["因子", "五分位", "样本数", "平均次日/当日市场收益", "大亏日率"])
+    table["avg_next_market_return"] = table["avg_next_market_return"].map(_format_percent)
+    table["big_loss_day_rate"] = table["big_loss_day_rate"].map(_format_percent)
+    return table.rename(
+        columns={
+            "factor_name": "因子",
+            "factor_quintile": "五分位",
+            "sample_count": "样本数",
+            "avg_next_market_return": "平均次日/当日市场收益",
+            "big_loss_day_rate": "大亏日率",
+        }
+    )
+
+
+def _format_diagnostic_percentages(table: pd.DataFrame) -> pd.DataFrame:
+    output = table.copy()
+    percentage_columns = [
+        "mean_market_return",
+        "median_market_return",
+        "win_rate",
+        "big_up_day_rate",
+        "big_loss_day_rate",
+        "trend_day_rate",
+        "max_loss",
+    ]
+    for column in percentage_columns:
+        if column in output.columns:
+            output[column] = output[column].map(_format_percent)
+    return output
+
+
+def _engine_summary_table(scores: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "date",
+        "raw_score_bias",
+        "final_bias",
+        "bias_label",
+        "risk_override",
+        "total_score",
+        "confidence",
+        "trend_day_probability",
+        "trend_direction_bias",
+    ]
+    existing = [column for column in columns if column in scores.columns]
+    table = scores[existing].copy()
+    if "raw_score_bias" not in table.columns:
+        table["raw_score_bias"] = table["total_score"].map(_raw_score_bias)
+    if "final_bias" not in table.columns:
+        table["final_bias"] = table["bias_label"]
+    if "risk_override" not in table.columns:
+        table["risk_override"] = ""
     table["date"] = pd.to_datetime(table["date"]).dt.strftime("%Y-%m-%d")
-    table["bias_label"] = table["bias_label"].map(_bias_label)
+    table["raw_score_bias"] = table["raw_score_bias"].map(_bias_label)
+    table["final_bias"] = table["final_bias"].map(_bias_label)
     table["trend_direction_bias"] = table["trend_direction_bias"].map(_trend_label)
+    table["risk_override"] = table["risk_override"].replace("", "无")
     table = table.rename(
         columns={
             "date": "信号日期",
-            "bias_label": "市场风向",
+            "raw_score_bias": "原始分数风向",
+            "final_bias": "最终风向",
+            "risk_override": "风险覆盖",
             "total_score": "总分",
             "confidence": "置信度",
             "trend_day_probability": "趋势日概率",
             "trend_direction_bias": "趋势方向",
         }
     )
+    table = table.drop(columns=["bias_label"], errors="ignore")
     return _round_numeric(table)
 
 
@@ -612,19 +829,19 @@ def _round_numeric(table: pd.DataFrame) -> pd.DataFrame:
 
 
 def _format_percent(value: Any) -> str:
-    if value is None:
+    if value is None or pd.isna(value):
         return "N/A"
     return f"{float(value) * 100:.1f}%"
 
 
 def _format_float(value: Any) -> str:
-    if value is None:
+    if value is None or pd.isna(value):
         return "N/A"
     return f"{float(value):.3f}"
 
 
 def _trading_posture(latest: dict[str, Any]) -> str:
-    label = latest.get("bias_label")
+    label = latest.get("final_bias") or latest.get("bias_label")
     trend_probability = float(latest.get("trend_day_probability") or 0.0)
     direction = latest.get("trend_direction_bias")
     if label == "Risk-Off":
@@ -645,6 +862,27 @@ def _bias_label(value: Any) -> str:
         "Risk-Off": "Risk-Off / 防守",
     }
     return labels.get(str(value), "N/A")
+
+
+def _raw_score_bias(total_score: Any) -> str:
+    score = float(total_score or 0.0)
+    if score >= 30:
+        return "Risk-On"
+    if score <= -30:
+        return "Risk-Off"
+    return "Neutral"
+
+
+def _override_reason_from_flags(risk_flags: list[dict[str, Any]]) -> str:
+    if not risk_flags:
+        return ""
+    reasons = []
+    for flag in risk_flags:
+        factor_name = flag.get("factor_name", "unknown_factor")
+        factor_score = _format_float(flag.get("factor_score"))
+        threshold = _format_float(flag.get("threshold"))
+        reasons.append(f"{factor_name} crossed hard Risk-Off threshold ({factor_score} <= {threshold})")
+    return "; ".join(reasons)
 
 
 def _trend_label(value: Any) -> str:

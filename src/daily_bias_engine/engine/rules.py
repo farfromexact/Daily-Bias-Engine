@@ -69,14 +69,20 @@ class DailyBiasEngine:
             total_score = 0.0 if weight_sum == 0 else scored["contribution"].sum() / weight_sum
             total_score = float(np.clip(total_score, -100.0, 100.0))
             risk_flags = self._risk_flags(scored)
-            label = self._label(total_score, risk_flags)
+            raw_label = self._raw_label(total_score)
+            final_label = self._label(total_score, risk_flags)
+            risk_override = self._risk_override(raw_label, final_label, risk_flags)
+            override_reason = self._override_reason(risk_flags)
             trend_probability = self._trend_probability(total_score, risk_flags)
-            trend_direction_bias = self._trend_direction_bias(total_score, label)
+            trend_direction_bias = self._trend_direction_bias(total_score, final_label)
             confidence = self._confidence(total_score, risk_flags)
             sub_scores = self._sub_scores(scored)
             explanation = self._explanation(
                 date,
-                label,
+                raw_label,
+                final_label,
+                risk_override,
+                override_reason,
                 total_score,
                 confidence,
                 trend_probability,
@@ -89,7 +95,11 @@ class DailyBiasEngine:
                 {
                     "date": pd.Timestamp(date).normalize(),
                     "total_score": total_score,
-                    "bias_label": label,
+                    "raw_score_bias": raw_label,
+                    "final_bias": final_label,
+                    "bias_label": final_label,
+                    "risk_override": risk_override,
+                    "override_reason": override_reason,
                     "confidence": confidence,
                     "sub_scores": sub_scores,
                     "trend_day_probability": trend_probability,
@@ -100,14 +110,35 @@ class DailyBiasEngine:
             )
         return pd.DataFrame(rows)
 
-    def _label(self, total_score: float, risk_flags: list[dict[str, Any]]) -> str:
-        if len(risk_flags) >= self.hard_risk_off_min_flags:
-            return "Risk-Off"
+    def _raw_label(self, total_score: float) -> str:
         if total_score >= self.risk_on_threshold:
             return "Risk-On"
         if total_score <= self.risk_off_threshold:
             return "Risk-Off"
         return "Neutral"
+
+    def _label(self, total_score: float, risk_flags: list[dict[str, Any]]) -> str:
+        if len(risk_flags) >= self.hard_risk_off_min_flags:
+            return "Risk-Off"
+        return self._raw_label(total_score)
+
+    @staticmethod
+    def _risk_override(raw_label: str, final_label: str, risk_flags: list[dict[str, Any]]) -> str:
+        if risk_flags and final_label != raw_label:
+            return "Hard Risk-Off"
+        return ""
+
+    @staticmethod
+    def _override_reason(risk_flags: list[dict[str, Any]]) -> str:
+        if not risk_flags:
+            return ""
+        reasons = []
+        for flag in risk_flags:
+            reasons.append(
+                f"{flag['factor_name']} crossed hard Risk-Off threshold "
+                f"({float(flag['factor_score']):.1f} <= {float(flag['threshold']):.1f})"
+            )
+        return "; ".join(reasons)
 
     def _trend_probability(self, total_score: float, risk_flags: list[dict[str, Any]]) -> float:
         probability = self.trend_probability_intercept + (abs(total_score) / 100.0) * self.trend_probability_slope
@@ -179,7 +210,10 @@ class DailyBiasEngine:
     def _explanation(
         cls,
         date: pd.Timestamp,
-        label: str,
+        raw_label: str,
+        final_label: str,
+        risk_override: str,
+        override_reason: str,
         total_score: float,
         confidence: float,
         trend_probability: float,
@@ -194,6 +228,7 @@ class DailyBiasEngine:
                 {
                     "factor_name": str(row["factor_name"]),
                     "group": str(row["group"]),
+                    "data_source": str(row.get("data_source", "")),
                     "raw_value": float(row["raw_value"]),
                     "zscore_value": float(row["zscore_value"]),
                     "directional_score": float(row["directional_score"]),
@@ -201,11 +236,16 @@ class DailyBiasEngine:
                     "weight": float(row["weight"]),
                     "contribution": float(row["contribution"]),
                     "data_date": pd.Timestamp(row["data_date"]).strftime("%Y-%m-%d"),
+                    "available_time": str(row.get("available_time", row.get("asof_time", ""))),
                 }
             )
         return {
             "date": pd.Timestamp(date).strftime("%Y-%m-%d"),
-            "bias_label": label,
+            "raw_score_bias": raw_label,
+            "final_bias": final_label,
+            "bias_label": final_label,
+            "risk_override": risk_override,
+            "override_reason": override_reason,
             "total_score": float(total_score),
             "confidence": float(confidence),
             "trend_day_probability": float(trend_probability),

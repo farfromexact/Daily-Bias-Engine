@@ -36,8 +36,11 @@ It is not a next-bar predictor. It answers:
 Each factor row must include:
 
 - `date`: signal date.
+- `signal_date`: explicit alias for the signal date, kept for audit and tests.
 - `data_date`: actual source data date used by the factor.
+- `available_time`: time the input data was available.
 - `factor_name`
+- `data_source`
 - `raw_value`
 - `zscore_value`
 - `directional_score`: clipped to `[-1, 1]`.
@@ -52,7 +55,11 @@ The rule engine emits one row per signal date:
 
 - `date`
 - `total_score`: `-100` to `+100`
-- `bias_label`: `Risk-On`, `Neutral`, or `Risk-Off`
+- `raw_score_bias`: score-only bias before hard risk overrides.
+- `final_bias`: final `Risk-On`, `Neutral`, or `Risk-Off`.
+- `bias_label`: backward-compatible alias for `final_bias`.
+- `risk_override`: for example `Hard Risk-Off`.
+- `override_reason`: human-readable override trigger.
 - `confidence`: `0` to `100`
 - `sub_scores`: grouped scores on the same `-100` to `+100` scale
 - `trend_day_probability`: `0` to `100`
@@ -131,3 +138,17 @@ Metrics include:
 - Trend day recall.
 - Big loss day filter rate.
 - False risk-off rate.
+
+## Diagnostics
+
+The dashboard includes additional diagnostics:
+
+- Backtest diagnostics by final bias.
+- Total score bucket diagnostics.
+- Trend probability bucket diagnostics.
+- Factor diagnostics covering next market-return correlation, big-loss
+  relationship, trend-day relationship, factor quintiles, and recent 60/120 day
+  behavior.
+
+Diagnostics use realized `market_result_daily` only after signal generation.
+Realized label columns are forbidden in factor tables.

@@ -38,6 +38,9 @@ def test_daily_bias_engine_scores_weighted_factors() -> None:
     row = output.iloc[0]
 
     assert row["bias_label"] == "Risk-On"
+    assert row["raw_score_bias"] == "Risk-On"
+    assert row["final_bias"] == "Risk-On"
+    assert row["risk_override"] == ""
     assert row["total_score"] == pytest.approx(70.0)
     assert row["confidence"] == pytest.approx(70.0)
     assert row["trend_direction_bias"] == "up"
@@ -101,6 +104,10 @@ def test_daily_bias_engine_hard_risk_off_downgrade() -> None:
     row = engine.score(factors).iloc[0]
 
     assert row["total_score"] == pytest.approx(16.0)
+    assert row["raw_score_bias"] == "Neutral"
+    assert row["final_bias"] == "Risk-Off"
     assert row["bias_label"] == "Risk-Off"
+    assert row["risk_override"] == "Hard Risk-Off"
+    assert "overseas_market_momentum crossed hard Risk-Off threshold" in row["override_reason"]
     assert row["trend_direction_bias"] == "unclear"
     assert row["risk_flags_json"][0]["factor_name"] == "overseas_market_momentum"

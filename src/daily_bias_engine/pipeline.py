@@ -13,7 +13,7 @@ import yaml
 from daily_bias_engine.backtest import evaluate_bias_predictions
 from daily_bias_engine.data import WindDataClient
 from daily_bias_engine.engine import DailyBiasEngine
-from daily_bias_engine.features import calculate_all_features
+from daily_bias_engine.features import calculate_all_features, validate_no_lookahead_contract
 from daily_bias_engine.labeling import label_market_results
 from daily_bias_engine.report import build_daily_report
 
@@ -115,6 +115,9 @@ def run_pipeline_from_raw(
         overseas_ohlcv=raw["overseas_ohlcv"],
         ashare_ohlcv=raw["ashare_ohlcv"],
     )
+    calendar_config = _load_yaml(config_path / "calendar.yaml")
+    decision_time = str(calendar_config.get("calendar", {}).get("signal_time", "09:20:00"))
+    factors = validate_no_lookahead_contract(factors, decision_time=decision_time)
     engine = DailyBiasEngine.from_yaml(config_path / "factor_weights.yaml", config_path / "thresholds.yaml")
     scores = engine.score(factors)
 
