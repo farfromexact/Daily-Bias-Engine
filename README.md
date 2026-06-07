@@ -18,6 +18,11 @@ filter:
 - A signal for date `T` cannot use `T` close data.
 - Explanations include top positive and negative drivers plus hard risk flags.
 
+WindPy integration is available through `WindPyDataClient`. The Wind terminal
+must be installed, running, and logged in. Streamlit supports both Wind live mode
+and mock demo mode; when Wind login fails, the dashboard falls back to mock data
+with a warning.
+
 ## Install
 
 ```bash
@@ -30,13 +35,14 @@ python -m pip install -e ".[test]"
 pytest
 ```
 
-## Run Streamlit Demo
+## Run Streamlit Dashboard
 
 ```bash
-streamlit run apps/streamlit_app.py
+python -m streamlit run apps/streamlit_app.py
 ```
 
-The demo runs the full pipeline with `MockWindDataClient`:
+The dashboard can run the full pipeline with either `WindPyDataClient` or
+`MockWindDataClient`:
 
 1. Generate deterministic mock OHLCV, futures open interest, and rates data.
 2. Calculate representative v1 factors.

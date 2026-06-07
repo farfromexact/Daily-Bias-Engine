@@ -2,7 +2,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from daily_bias_engine.data import MockWindDataClient, RawDataCache
+import pytest
+
+from daily_bias_engine.data import MockWindDataClient, RawDataCache, WindDataError, WindPyDataClient
 
 
 def test_mock_wind_client_daily_ohlcv_is_deterministic() -> None:
@@ -57,3 +59,14 @@ def test_mock_client_can_cache_raw_data(tmp_path: Path) -> None:
     snapshots = cache.list_snapshots("daily_ohlcv")
     assert len(snapshots) == 1
     assert not frame.empty
+
+
+def test_windpy_client_reports_connection_errors() -> None:
+    client = WindPyDataClient()
+
+    try:
+        frame = client.get_daily_ohlcv(["000300.SH"], "2024-04-29", "2024-04-30")
+    except WindDataError as exc:
+        assert "WindPy" in str(exc) or "Wind" in str(exc)
+    else:
+        assert set(["date", "symbol", "open", "high", "low", "close", "volume", "amount", "asof_time"]).issubset(frame.columns)

@@ -76,7 +76,9 @@ Explanation includes:
 - `get_interest_rates(series, start_date, end_date)`
 
 `MockWindDataClient` implements the interface with deterministic synthetic data.
-Real Wind API integration should implement the same interface later.
+`WindPyDataClient` implements the same interface through WindPy. The Wind
+terminal must be installed, running, and logged in before live data calls can
+succeed.
 
 ## Raw Snapshot Cache
 
