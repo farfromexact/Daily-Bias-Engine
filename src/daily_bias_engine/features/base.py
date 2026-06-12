@@ -19,16 +19,16 @@ FACTOR_COLUMNS = [
 ]
 
 FACTOR_DATA_SOURCES = {
-    "equity_index_futures_basis": "Wind daily close: IF.CFE and 000300.SH",
-    "futures_open_interest_momentum": "Wind futures open interest: IF.CFE oi",
-    "rates_change_5d": "Wind interest rate series: DR007.IB and CGB10Y.IB",
-    "yield_curve_slope": "Wind interest rate series",
-    "etf_flow_proxy": "Wind ETF daily amount: 510300.SH and 510500.SH",
+    "equity_index_futures_basis": "Market-data daily close: IF.CFE and 000300.SH",
+    "futures_open_interest_momentum": "Market-data futures open interest: IF.CFE oi",
+    "rates_change_5d": "Market-data interest rate series: DR007.IB and CGB10Y.IB when available",
+    "yield_curve_slope": "Market-data interest rate spread when available",
+    "etf_flow_proxy": "Market-data ETF daily amount: 510300.SH and 510500.SH",
     "margin_balance_momentum": "Derived proxy from ETF amount until real margin balance is connected",
-    "overseas_market_momentum": "Wind overseas daily prices: SPX.GI and HSI.HI",
-    "overseas_volatility_pressure": "Wind overseas high-low range proxy: SPX.GI and HSI.HI",
-    "ashare_breadth_proxy": "Wind A-share index daily open and close prices",
-    "ashare_turnover_momentum": "Wind A-share index daily volume",
+    "overseas_market_momentum": "Market-data overseas daily prices: SPX.GI and HSI.HI",
+    "overseas_volatility_pressure": "Market-data overseas high-low range proxy: SPX.GI and HSI.HI",
+    "ashare_breadth_proxy": "Market-data A-share index daily open and close prices",
+    "ashare_turnover_momentum": "Market-data A-share index daily volume",
 }
 
 

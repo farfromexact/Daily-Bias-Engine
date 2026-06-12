@@ -1,4 +1,4 @@
-"""Fetch Wind option data once and persist normalized local parquet chains."""
+"""Fetch iFinD option data and persist normalized local parquet chains."""
 
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from daily_bias_engine.options.data import OptionMarketDataStore, WindPyIFindFallbackOptionClient, WindPyOptionClient, load_normalized_chain
+from daily_bias_engine.options.data import IFindOptionClient, OptionMarketDataStore, load_normalized_chain
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Fetch Wind A-share index option chains and persist local parquet data.")
+    parser = argparse.ArgumentParser(description="Fetch iFinD A-share index option chains and persist local parquet data.")
     parser.add_argument("--date", help="Single trade date, YYYY-MM-DD.")
     parser.add_argument("--start-date", help="First trade date for range fetch, YYYY-MM-DD.")
     parser.add_argument("--end-date", help="Last trade date for range fetch, YYYY-MM-DD. Defaults to today when --start-date is set.")
@@ -30,18 +30,11 @@ def main() -> None:
     parser.add_argument("--data-root", default=str(PROJECT_ROOT / "data" / "options"), help="Option parquet output root.")
     parser.add_argument("--overwrite", action="store_true", help="Refetch and overwrite existing local parquet files.")
     parser.add_argument("--fail-fast", action="store_true", help="Stop immediately when a product/date fetch fails.")
-    parser.add_argument(
-        "--quote-fallback",
-        choices=["none", "ifind"],
-        default="none",
-        help="Fallback quote provider when Wind WSD is quota-limited. Defaults to none.",
-    )
-    parser.add_argument("--active-only", action="store_true", help="Persist only contracts with positive price, volume, or open interest.")
     args = parser.parse_args()
 
-    products = args.product or ["SSE50", "CSI300", "CSI1000"]
-    client = WindPyIFindFallbackOptionClient() if args.quote_fallback == "ifind" else WindPyOptionClient()
+    client = IFindOptionClient()
     store = OptionMarketDataStore(args.data_root)
+    products = args.product or ["SSE50", "CSI300", "CSI1000"]
     trade_dates = _resolve_trade_dates(client, args.date, args.start_date, args.end_date)
     failures: list[tuple[str, str, str]] = []
     try:
@@ -53,8 +46,6 @@ def main() -> None:
                     continue
                 try:
                     chain = load_normalized_chain(client, product_group, trade_date)
-                    if args.active_only:
-                        chain = _filter_active_chain(chain)
                     path = store.write_normalized_chain(chain)
                     print(f"OK {trade_date} {product_group} rows={len(chain)} path={path}", flush=True)
                 except Exception as exc:
@@ -64,9 +55,8 @@ def main() -> None:
                     if args.fail_fast:
                         raise
     finally:
-        close = getattr(client, "close", None)
-        if callable(close):
-            close()
+        client.close()
+
     if failures:
         print("\nFailures:", file=sys.stderr, flush=True)
         for trade_date, product_group, message in failures:
@@ -75,7 +65,7 @@ def main() -> None:
 
 
 def _resolve_trade_dates(
-    client: WindPyOptionClient,
+    client: IFindOptionClient,
     date: str | None,
     start_date: str | None,
     end_date: str | None,
@@ -94,14 +84,6 @@ def _resolve_trade_dates(
 def _normalized_chain_path(root: Path, product_group: str, trade_date: str) -> Path:
     date_part = pd.Timestamp(trade_date).strftime("%Y-%m-%d")
     return root / "normalized_chain" / f"product_group={product_group.upper()}" / f"trade_date={date_part}" / "data.parquet"
-
-
-def _filter_active_chain(chain: pd.DataFrame) -> pd.DataFrame:
-    value_columns = [column for column in ["close", "settle", "open_interest", "volume"] if column in chain.columns]
-    if not value_columns:
-        return chain
-    values = chain[value_columns].apply(pd.to_numeric, errors="coerce").fillna(0.0)
-    return chain.loc[values.abs().sum(axis=1) > 0].copy()
 
 
 if __name__ == "__main__":

@@ -30,21 +30,21 @@ from daily_bias_engine.options.reports.daily_option_state import generate_daily_
 
 CONFIG_DIR = PROJECT_ROOT / "configs"
 SNAPSHOT_ROOT = PROJECT_ROOT / "data" / "snapshots"
-OPTION_DATA_ROOT = PROJECT_ROOT / "data" / "options"
+OPTION_DATA_ROOT = PROJECT_ROOT / "data" / "options_ifind"
 
 
 def run_dashboard_pipeline(snapshot_dir: str | Path | None = None) -> dict[str, Any]:
-    """Run the dashboard pipeline from a local Wind snapshot only."""
+    """Run the dashboard pipeline from a local market-data snapshot."""
 
     if snapshot_dir is None:
         snapshots = list_snapshots(SNAPSHOT_ROOT)
         if not snapshots:
-            raise FileNotFoundError(f"No local Wind snapshot found under {SNAPSHOT_ROOT}.")
+            raise FileNotFoundError(f"No local market snapshot found under {SNAPSHOT_ROOT}.")
         snapshot_dir = snapshots[0].path
     return run_pipeline_from_snapshot(snapshot_dir=snapshot_dir, config_dir=CONFIG_DIR)
 
 
-@st.cache_data(show_spinner="Loading local Wind snapshot...")
+@st.cache_data(show_spinner="Loading local market snapshot...")
 def _cached_dashboard_result(snapshot_dir: str | None) -> dict[str, Any]:
     return run_dashboard_pipeline(snapshot_dir=snapshot_dir)
 
@@ -280,11 +280,11 @@ def _available_option_snapshots(data_root: Path | str = OPTION_DATA_ROOT) -> dic
 
 def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
     st.subheader("Local Option State")
-    st.caption(f"Source: {OPTION_DATA_ROOT / 'normalized_chain'}")
+    st.caption(f"Source: iFinD local option chains at {OPTION_DATA_ROOT / 'normalized_chain'}")
     if not option_snapshots:
         st.info(
             "No local option snapshots found. Run "
-            "`python scripts/fetch_wind_options_snapshot.py --date YYYY-MM-DD --product CSI300` first."
+            "`python scripts/fetch_ifind_options_snapshot.py --date YYYY-MM-DD --product CSI300 --data-root data/options_ifind` first."
         )
         return
 
@@ -423,12 +423,12 @@ def _render_option_chart(
 
 def _load_dashboard_data(snapshot_info: SnapshotInfo | None) -> tuple[dict[str, Any] | None, str]:
     if snapshot_info is None:
-        return None, f"No local Wind snapshot found under {SNAPSHOT_ROOT}. Run `python scripts/fetch_wind_snapshot.py` first."
+        return None, f"No local market snapshot found under {SNAPSHOT_ROOT}. Run `python scripts/fetch_ifind_snapshot.py` first."
     try:
         result = _cached_dashboard_result(str(snapshot_info.path))
         return result, ""
     except Exception as exc:
-        return None, f"Local Wind snapshot read failed: {exc}"
+        return None, f"Local market snapshot read failed: {exc}"
 
 
 
@@ -1051,8 +1051,9 @@ def _direction_label(value: Any) -> str:
 
 def _data_mode_label(value: str) -> str:
     labels = {
-        "snapshot": "Local Wind snapshot",
+        "snapshot": "Local market snapshot",
         "wind": "Localized Wind data",
+        "ifind": "Localized iFinD data",
     }
     return labels.get(value, value)
 

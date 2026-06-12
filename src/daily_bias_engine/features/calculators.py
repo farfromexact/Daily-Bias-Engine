@@ -76,6 +76,9 @@ def calculate_rates_and_bond_futures(rates: pd.DataFrame) -> pd.DataFrame:
 
     prepared = rates.copy()
     prepared["date"] = pd.to_datetime(prepared["date"]).dt.normalize()
+    prepared = prepared[prepared["date"].dt.weekday < 5]
+    if prepared.empty:
+        raise ValueError("Rates frame has no weekday observations.")
     pivot = prepared.pivot_table(index="date", columns="series", values="rate", aggfunc="mean")
     average_rate = pivot.mean(axis=1)
     rate_change = average_rate.diff(5).fillna(0.0)
@@ -157,13 +160,22 @@ def calculate_etf_and_margin_flow(flow_data: pd.DataFrame) -> pd.DataFrame:
 def calculate_overseas_market(ohlcv: pd.DataFrame) -> pd.DataFrame:
     """Calculate overseas momentum and volatility pressure factors."""
 
-    close = daily_mean(ohlcv, "close")
-    high = daily_mean(ohlcv, "high")
-    low = daily_mean(ohlcv, "low")
-    momentum = close.pct_change(1).fillna(0.0)
+    if ohlcv.empty or not {"date", "symbol", "close", "high", "low"}.issubset(ohlcv.columns):
+        raise ValueError("Overseas frame must include date, symbol, close, high, and low.")
+
+    prepared = ohlcv.copy()
+    prepared["date"] = pd.to_datetime(prepared["date"]).dt.normalize()
+    prepared = prepared.sort_values(["symbol", "date"])
+    prepared["close"] = pd.to_numeric(prepared["close"], errors="coerce")
+    prepared["high"] = pd.to_numeric(prepared["high"], errors="coerce")
+    prepared["low"] = pd.to_numeric(prepared["low"], errors="coerce")
+    prepared["symbol_momentum"] = prepared.groupby("symbol", sort=True)["close"].pct_change().fillna(0.0)
+    prepared["symbol_volatility"] = ((prepared["high"] - prepared["low"]) / prepared["close"].replace(0.0, pd.NA)).fillna(0.0)
+
+    momentum = prepared.groupby("date", sort=True)["symbol_momentum"].mean()
     momentum_z = rolling_zscore(momentum)
 
-    volatility = ((high - low) / close.replace(0.0, pd.NA)).fillna(0.0)
+    volatility = prepared.groupby("date", sort=True)["symbol_volatility"].mean()
     volatility_z = rolling_zscore(volatility)
 
     asof = _asof_time(ohlcv)

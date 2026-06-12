@@ -1,8 +1,10 @@
 from pathlib import Path
+import sys
+import types
 
 import pandas as pd
 
-from daily_bias_engine.data import RawDataCache, WindDataError, WindPyDataClient
+from daily_bias_engine.data import IFindDataClient, RawDataCache, WindDataError, WindPyDataClient
 
 
 def test_raw_data_cache_writes_append_only_snapshots(tmp_path: Path) -> None:
@@ -35,3 +37,54 @@ def test_windpy_client_reports_connection_errors() -> None:
         assert "WindPy" in str(exc) or "Wind" in str(exc)
     else:
         assert set(["date", "symbol", "open", "high", "low", "close", "volume", "amount", "asof_time"]).issubset(frame.columns)
+
+
+def test_ifind_client_maps_project_symbols(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def login(username: str, password: str) -> int:
+        return 0
+
+    def logout() -> int:
+        return 0
+
+    def hq(thscode: str, *_args: object):
+        calls.append(thscode)
+        return types.SimpleNamespace(
+            errorcode=0,
+            errmsg="",
+            data=pd.DataFrame(
+                [
+                    {
+                        "time": "2026-06-12",
+                        "thscode": thscode,
+                        "open": 1.0,
+                        "high": 1.2,
+                        "low": 0.9,
+                        "close": 1.1,
+                        "volume": 100,
+                        "amount": 110.0,
+                    }
+                ]
+            ),
+        )
+
+    module = types.SimpleNamespace(
+        THS_iFinDLogin=login,
+        THS_iFinDLogout=logout,
+        THS_GetErrorInfo=lambda code: f"error {code}",
+        THS_HQ=hq,
+    )
+    monkeypatch.setitem(sys.modules, "iFinDPy", module)
+    monkeypatch.setenv("IFIND_USERNAME", "user")
+    monkeypatch.setenv("IFIND_PASSWORD", "password")
+
+    client = IFindDataClient()
+    frame = client.get_daily_ohlcv(["IF.CFE", "HSI.HI"], "2026-06-12", "2026-06-12")
+    client.close()
+
+    assert calls == ["IF00.CFE", "HSI.HK"]
+    assert sorted(frame["symbol"].tolist()) == ["HSI.HI", "IF.CFE"]
+    assert set(["date", "symbol", "open", "high", "low", "close", "volume", "amount", "asof_time", "source"]).issubset(
+        frame.columns
+    )

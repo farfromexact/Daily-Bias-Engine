@@ -148,13 +148,18 @@ class WindPyOptionClient(OptionWindClient):
         wind = self._wind()
         date = str(_normalize_date(trade_date).date())
         rows = []
+        errors: list[str] = []
         for chunk in _chunks([str(code) for code in codes], 100):
             result = wind.wsd(",".join(chunk), ",".join(fields), date, date, self.options)
             if getattr(result, "ErrorCode", 0) != 0:
-                rows.extend(self._wsd_frame_one_by_one(wind, chunk, fields, date, trade_date))
+                chunk_rows, chunk_errors = self._wsd_frame_one_by_one(wind, chunk, fields, date, trade_date)
+                rows.extend(chunk_rows)
+                errors.extend(chunk_errors or [_wind_error_message("wsd", ",".join(chunk), result)])
                 continue
             rows.extend(_rows_from_wsd_result(result, chunk, fields, trade_date, self.asof_time))
-        return pd.DataFrame(rows)
+        if not rows and errors:
+            raise OptionDataError("; ".join(errors))
+        return pd.DataFrame(rows, columns=_wsd_columns(fields))
 
     def _wsd_frame_one_by_one(
         self,
@@ -163,14 +168,16 @@ class WindPyOptionClient(OptionWindClient):
         fields: Sequence[str],
         date: str,
         trade_date: str | pd.Timestamp,
-    ) -> list[dict[str, object]]:
+    ) -> tuple[list[dict[str, object]], list[str]]:
         rows: list[dict[str, object]] = []
+        errors: list[str] = []
         for code in codes:
             result = wind.wsd(str(code), ",".join(fields), date, date, self.options)
             if getattr(result, "ErrorCode", 0) != 0:
+                errors.append(_wind_error_message("wsd", str(code), result))
                 continue
             rows.extend(_rows_from_wsd_result(result, [str(code)], fields, trade_date, self.asof_time))
-        return rows
+        return rows, errors
 
     def _generated_cffex_contracts(self, instrument: Any, trade_date: pd.Timestamp) -> list[dict[str, object]]:
         spot = self._reference_close(instrument.reference_index_code, trade_date)
@@ -218,6 +225,8 @@ class WindPyOptionClient(OptionWindClient):
 
     def _reference_close(self, code: str, trade_date: pd.Timestamp) -> float:
         frame = self._wsd_frame([code], ["close"], trade_date)
+        if "close" not in frame.columns:
+            raise OptionDataError(f"Wind WSD close missing for {code} on {trade_date.date()}.")
         close = pd.to_numeric(frame["close"], errors="coerce").dropna()
         if close.empty or float(close.iloc[0]) <= 0:
             raise OptionDataError(f"Cannot get reference close for {code} on {trade_date.date()}.")
@@ -246,8 +255,7 @@ def _normalize_date(value: str | pd.Timestamp) -> pd.Timestamp:
 def _is_wset_quota_error(result: Any) -> bool:
     if getattr(result, "ErrorCode", 0) != -40522017:
         return False
-    data = getattr(result, "Data", []) or []
-    text = " ".join(str(item) for column in data for item in column)
+    text = _wind_result_text(result)
     return "quota exceeded" in text.lower()
 
 
@@ -294,6 +302,22 @@ def _wind_table(result: Any) -> pd.DataFrame:
         raise OptionDataError("Wind result did not include field names.")
     data = getattr(result, "Data", [])
     return pd.DataFrame({field: values for field, values in zip(fields, data)})
+
+
+def _wsd_columns(fields: Sequence[str]) -> list[str]:
+    return ["trade_date", "symbol", "option_code", "asof_time", "source", *[str(field) for field in fields]]
+
+
+def _wind_error_message(method: str, symbol: str, result: Any) -> str:
+    error_code = getattr(result, "ErrorCode", None)
+    text = _wind_result_text(result)
+    detail = f"; {text}" if text else ""
+    return f"Wind {method} failed for {symbol}: ErrorCode={error_code}{detail}"
+
+
+def _wind_result_text(result: Any) -> str:
+    data = getattr(result, "Data", []) or []
+    return " ".join(str(item) for column in data for item in column)
 
 
 def _rows_from_wsd_result(

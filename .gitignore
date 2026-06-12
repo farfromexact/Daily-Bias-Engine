@@ -12,5 +12,11 @@ data/processed/
 data/features/
 data/signals/
 data/results/
+data/options/normalized_chain/
+data/options_ifind/
+data/options_ifind_probe/
+data/snapshots_probe/
 .streamlit_logs/
 .streamlit-options.*.log
+.wind-options-fetch*.log
+.ifind-options-fetch*.log

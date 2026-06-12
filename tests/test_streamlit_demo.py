@@ -22,7 +22,7 @@ def test_streamlit_pipeline_requires_local_snapshot(tmp_path, monkeypatch) -> No
 
     monkeypatch.setattr(streamlit_app, "SNAPSHOT_ROOT", tmp_path)
 
-    with pytest.raises(FileNotFoundError, match="No local Wind snapshot"):
+    with pytest.raises(FileNotFoundError, match="No local market snapshot"):
         streamlit_app.run_dashboard_pipeline()
 
 
