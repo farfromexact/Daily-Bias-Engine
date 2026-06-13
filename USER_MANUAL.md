@@ -208,6 +208,14 @@ python -m streamlit run apps\streamlit_app.py --server.port 8506
 
 仓库包含 `.github/workflows/ifind_daily_update.yml`，默认每个工作日北京时间 `20:30` 自动运行，也可以在 GitHub Actions 页面手动触发。
 
+这个 workflow 使用 Windows self-hosted runner，而不是 GitHub 公共 `windows-latest` runner。原因是 `iFinDPy` 不是公开 PyPI 包，通常依赖本机安装的 iFinD 终端/API 环境。运行自动任务的那台 Windows 机器必须已经能执行：
+
+```powershell
+python -c "import iFinDPy; print('iFinDPy import ok')"
+```
+
+如果没有在线的 self-hosted runner，GitHub Actions 会一直排队；如果 runner 上不能导入 `iFinDPy`，任务会在取数前明确失败。
+
 需要在 GitHub repository secrets 中配置：
 
 - `IFIND_USERNAME`
@@ -215,7 +223,8 @@ python -m streamlit run apps\streamlit_app.py --server.port 8506
 
 自动任务会：
 
-- 安装项目和 `iFinDPy`。
+- 验证 runner 上的 Python 能导入 `iFinDPy`。
+- 安装项目依赖。
 - 运行 `python scripts/update_ifind_data.py`。
 - 校验 Streamlit pipeline 能读到最新 snapshot。
 - 强制加入并提交 `data/snapshots/` 和 `data/options_ifind/` 的更新。

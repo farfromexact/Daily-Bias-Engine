@@ -86,6 +86,12 @@ GitHub Actions at 20:30 China time on weekdays and can also be triggered
 manually. Configure repository secrets named `IFIND_USERNAME` and
 `IFIND_PASSWORD`.
 
+iFinD's Python SDK is not available from public PyPI and normally depends on a
+local iFinD terminal/API installation. The workflow therefore runs on a Windows
+self-hosted runner, not on GitHub-hosted `windows-latest`. The runner machine
+must have Python on `PATH` and `python -c "import iFinDPy"` must succeed before
+the scheduled workflow can fetch data.
+
 The workflow runs:
 
 ```bash
