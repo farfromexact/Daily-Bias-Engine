@@ -251,9 +251,9 @@ def main() -> None:
 
             日收盘数据只生成下一交易日的开盘前信号，因此表里的 `data_date` 必须早于 `date`。
 
-            **注意：当前快照可以是真实 Wind 数据。这里的 proxy 通常指“因子口径是替代变量”，
-            不是说底层行情是假数据。** 例如 ETF 成交额是真实 Wind 数据，但它只是 ETF 净申购的
-            proxy；指数样本上涨比例是真实 Wind 价格派生结果，但它只是全市场上涨家数的 proxy。
+            **注意：当前快照来自真实 iFinD 本地数据。这里的 proxy 通常指“因子口径是替代变量”，
+            不是说底层行情是假数据。** 例如 ETF 成交额是真实 iFinD 数据，但它只是 ETF 净申购的
+            proxy；指数样本上涨比例是真实 iFinD 价格派生结果，但它只是全市场上涨家数的 proxy。
             """
         )
         st.dataframe(pd.DataFrame(factor_logic_rows()), width="stretch")
@@ -725,6 +725,8 @@ def _engine_summary_table(scores: pd.DataFrame) -> pd.DataFrame:
         table["final_bias"] = table["bias_label"]
     if "risk_override" not in table.columns:
         table["risk_override"] = ""
+    table["date"] = pd.to_datetime(table["date"])
+    table = table.sort_values("date", ascending=False).reset_index(drop=True)
     table["date"] = pd.to_datetime(table["date"]).dt.strftime("%Y-%m-%d")
     table["raw_score_bias"] = table["raw_score_bias"].map(_bias_label)
     table["final_bias"] = table["final_bias"].map(_bias_label)
@@ -1052,7 +1054,6 @@ def _direction_label(value: Any) -> str:
 def _data_mode_label(value: str) -> str:
     labels = {
         "snapshot": "Local market snapshot",
-        "wind": "Localized Wind data",
         "ifind": "Localized iFinD data",
     }
     return labels.get(value, value)

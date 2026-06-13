@@ -3,8 +3,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from daily_bias_engine.options.data.wind_client import OptionDataError, WindPyOptionClient
-from scripts.fetch_wind_options_snapshot import _filter_active_chain, _normalized_chain_path, _resolve_trade_dates
+from scripts.fetch_ifind_options_snapshot import _normalized_chain_path, _resolve_trade_dates
 
 
 class CalendarClient:
@@ -28,37 +27,6 @@ def test_resolve_option_fetch_rejects_mixed_modes() -> None:
 
 
 def test_normalized_chain_path() -> None:
-    path = _normalized_chain_path(Path("data/options"), "csi300", "2026-06-05")
+    path = _normalized_chain_path(Path("data/options_ifind"), "csi300", "2026-06-05")
 
-    assert path == Path("data/options/normalized_chain/product_group=CSI300/trade_date=2026-06-05/data.parquet")
-
-
-def test_filter_active_chain_removes_zero_price_zero_interest_rows() -> None:
-    chain = pd.DataFrame(
-        [
-            {"option_code": "active", "close": 1.0, "settle": 0.0, "open_interest": 0.0, "volume": 0.0},
-            {"option_code": "position", "close": 0.0, "settle": 0.0, "open_interest": 2.0, "volume": 0.0},
-            {"option_code": "zero", "close": 0.0, "settle": 0.0, "open_interest": 0.0, "volume": 0.0},
-        ]
-    )
-
-    active = _filter_active_chain(chain)
-
-    assert active["option_code"].tolist() == ["active", "position"]
-
-
-def test_wind_wsd_quota_error_is_preserved(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = WindPyOptionClient()
-
-    class Result:
-        ErrorCode = -40522017
-        Data = [["CWSDService:: quota exceeded."]]
-
-    class FakeWind:
-        def wsd(self, *_args: object) -> Result:
-            return Result()
-
-    monkeypatch.setattr(client, "_wind", lambda: FakeWind())
-
-    with pytest.raises(OptionDataError, match="quota exceeded"):
-        client._wsd_frame(["000300.SH"], ["close"], "2026-03-06")
+    assert path == Path("data/options_ifind/normalized_chain/product_group=CSI300/trade_date=2026-06-05/data.parquet")

@@ -35,7 +35,7 @@ def test_no_lookahead_contract_rejects_domestic_same_day_data() -> None:
                 "data_date": "2024-01-03",
                 "available_time": "08:30:00",
                 "factor_name": "ashare_breadth_proxy",
-                "data_source": "Wind A-share market structure",
+                "data_source": "iFinD A-share market structure",
             }
         ]
     )
@@ -52,7 +52,7 @@ def test_no_lookahead_contract_allows_overseas_preopen_same_day_data() -> None:
                 "data_date": "2024-01-03",
                 "available_time": "08:30:00",
                 "factor_name": "overseas_market_momentum",
-                "data_source": "Wind overseas market SPX.GI",
+                "data_source": "iFinD overseas market SPX.GI",
             }
         ]
     )
@@ -70,7 +70,7 @@ def test_no_lookahead_contract_rejects_late_available_time() -> None:
                 "data_date": "2024-01-03",
                 "available_time": "09:31:00",
                 "factor_name": "overseas_market_momentum",
-                "data_source": "Wind overseas market SPX.GI",
+                "data_source": "iFinD overseas market SPX.GI",
             }
         ]
     )
@@ -87,7 +87,7 @@ def test_no_lookahead_contract_rejects_label_columns_in_factor_table() -> None:
                 "data_date": "2024-01-02",
                 "available_time": "16:30:00",
                 "factor_name": "equity_index_futures_basis",
-                "data_source": "Wind domestic futures",
+                "data_source": "iFinD domestic futures",
                 "market_return": 0.01,
             }
         ]
@@ -105,7 +105,7 @@ def test_no_lookahead_contract_rejects_market_result_before_signal_date() -> Non
                 "data_date": "2024-01-02",
                 "available_time": "16:30:00",
                 "factor_name": "equity_index_futures_basis",
-                "data_source": "Wind domestic futures",
+                "data_source": "iFinD domestic futures",
             }
         ]
     )

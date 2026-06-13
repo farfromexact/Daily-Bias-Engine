@@ -27,7 +27,7 @@ def main() -> None:
         choices=["SSE50", "CSI300", "CSI1000"],
         help="Product group to fetch. Repeat the flag to fetch multiple groups. Defaults to all groups.",
     )
-    parser.add_argument("--data-root", default=str(PROJECT_ROOT / "data" / "options"), help="Option parquet output root.")
+    parser.add_argument("--data-root", default=str(PROJECT_ROOT / "data" / "options_ifind"), help="Option parquet output root.")
     parser.add_argument("--overwrite", action="store_true", help="Refetch and overwrite existing local parquet files.")
     parser.add_argument("--fail-fast", action="store_true", help="Stop immediately when a product/date fetch fails.")
     args = parser.parse_args()

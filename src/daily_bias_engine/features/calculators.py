@@ -12,6 +12,16 @@ from daily_bias_engine.features.base import (
     validate_factor_frame,
 )
 
+OVERSEAS_SYMBOL_WEIGHTS = {
+    "SPX.GI": 0.80,
+    "N225.GI": 0.10,
+    "KS11.GI": 0.10,
+}
+ASHARE_STRUCTURE_SYMBOLS = {"000016.SH", "000300.SH", "000688.SH", "399006.SZ"}
+FUNDING_RATE_SERIES = "DR007.IB"
+YIELD_CURVE_SHORT_SERIES = "CGB10Y"
+YIELD_CURVE_LONG_SERIES = "CGB30Y"
+
 
 def _asof_time(*frames: pd.DataFrame) -> str:
     for frame in frames:
@@ -80,8 +90,8 @@ def calculate_rates_and_bond_futures(rates: pd.DataFrame) -> pd.DataFrame:
     if prepared.empty:
         raise ValueError("Rates frame has no weekday observations.")
     pivot = prepared.pivot_table(index="date", columns="series", values="rate", aggfunc="mean")
-    average_rate = pivot.mean(axis=1)
-    rate_change = average_rate.diff(5).fillna(0.0)
+    funding_rate = pivot[FUNDING_RATE_SERIES] if FUNDING_RATE_SERIES in pivot.columns else pivot.mean(axis=1)
+    rate_change = funding_rate.diff(5).fillna(0.0)
     rate_z = rolling_zscore(rate_change)
 
     frames = [
@@ -95,9 +105,8 @@ def calculate_rates_and_bond_futures(rates: pd.DataFrame) -> pd.DataFrame:
         )
     ]
 
-    if pivot.shape[1] >= 2:
-        ordered = list(pivot.columns)
-        slope = (pivot[ordered[-1]] - pivot[ordered[0]]).fillna(0.0)
+    if {YIELD_CURVE_SHORT_SERIES, YIELD_CURVE_LONG_SERIES}.issubset(pivot.columns):
+        slope = (pivot[YIELD_CURVE_LONG_SERIES] - pivot[YIELD_CURVE_SHORT_SERIES]).dropna()
         slope_z = rolling_zscore(slope)
         frames.append(
             build_factor_frame(
@@ -171,11 +180,15 @@ def calculate_overseas_market(ohlcv: pd.DataFrame) -> pd.DataFrame:
     prepared["low"] = pd.to_numeric(prepared["low"], errors="coerce")
     prepared["symbol_momentum"] = prepared.groupby("symbol", sort=True)["close"].pct_change().fillna(0.0)
     prepared["symbol_volatility"] = ((prepared["high"] - prepared["low"]) / prepared["close"].replace(0.0, pd.NA)).fillna(0.0)
+    prepared["symbol_weight"] = prepared["symbol"].map(OVERSEAS_SYMBOL_WEIGHTS).fillna(0.0)
+    prepared = prepared[prepared["symbol_weight"] > 0.0].copy()
+    if prepared.empty:
+        raise ValueError("Overseas frame has no supported symbols.")
 
-    momentum = prepared.groupby("date", sort=True)["symbol_momentum"].mean()
+    momentum = _weighted_daily_mean(prepared, "symbol_momentum")
     momentum_z = rolling_zscore(momentum)
 
-    volatility = prepared.groupby("date", sort=True)["symbol_volatility"].mean()
+    volatility = _weighted_daily_mean(prepared, "symbol_volatility")
     volatility_z = rolling_zscore(volatility)
 
     asof = _asof_time(ohlcv)
@@ -204,6 +217,15 @@ def calculate_overseas_market(ohlcv: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _weighted_daily_mean(frame: pd.DataFrame, value_column: str) -> pd.Series:
+    weighted = frame.copy()
+    weighted["_weighted_value"] = weighted[value_column] * weighted["symbol_weight"]
+    grouped = weighted.groupby("date", sort=True)
+    numerator = grouped["_weighted_value"].sum()
+    denominator = grouped["symbol_weight"].sum().replace(0.0, pd.NA)
+    return (numerator / denominator).fillna(0.0)
+
+
 def calculate_ashare_market_structure(ohlcv: pd.DataFrame) -> pd.DataFrame:
     """Calculate market breadth and turnover momentum proxies."""
 
@@ -212,6 +234,9 @@ def calculate_ashare_market_structure(ohlcv: pd.DataFrame) -> pd.DataFrame:
 
     prepared = ohlcv.copy()
     prepared["date"] = pd.to_datetime(prepared["date"]).dt.normalize()
+    prepared = prepared[prepared["symbol"].isin(ASHARE_STRUCTURE_SYMBOLS)].copy()
+    if prepared.empty:
+        raise ValueError("A-share frame has no supported structure symbols.")
     prepared["is_up"] = prepared["close"] > prepared["open"]
     breadth = prepared.groupby("date", sort=True)["is_up"].mean() - 0.5
     breadth_z = rolling_zscore(breadth)

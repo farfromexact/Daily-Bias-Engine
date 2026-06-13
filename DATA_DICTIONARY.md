@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | `date` | date | Source observation date. |
 | `asof_time` | string | Time the source data was known. |
-| `source` | string | Data source, normally `wind` for localized Wind snapshots. |
+| `source` | string | Data source, normally `ifind` or `ifind_edb` for localized iFinD snapshots. |
 | `symbol` | string | Instrument code. |
 | `open` | float | Daily open price. |
 | `high` | float | Daily high price. |
@@ -21,7 +21,7 @@
 | Column | Type | Description |
 | --- | --- | --- |
 | `date` | date | Trading date. |
-| `symbol` | string | Wind-like security code. |
+| `symbol` | string | Market security code used by the project. |
 | `open` | float | Daily open price. |
 | `high` | float | Daily high price. |
 | `low` | float | Daily low price. |
@@ -48,6 +48,14 @@
 | `series` | string | Rate series identifier. |
 | `rate` | float | Interest rate value. |
 | `asof_time` | string | Data observation time. |
+
+Current rate identifiers:
+
+| Series | Source | Meaning |
+| --- | --- | --- |
+| `DR007.IB` | iFinD HQ | Funding rate series used by `rates_change_5d`. |
+| `CGB30Y` | iFinD EDB `L001618299` | China government bond yield to maturity, 30Y. |
+| `CGB10Y` | iFinD EDB `L001619604` | China government bond yield to maturity, 10Y. |
 
 ## `factor_daily`
 

@@ -11,7 +11,7 @@ import pandas as pd
 import yaml
 
 from daily_bias_engine.backtest import evaluate_bias_predictions
-from daily_bias_engine.data import WindDataClient
+from daily_bias_engine.data import MarketDataClient
 from daily_bias_engine.engine import DailyBiasEngine
 from daily_bias_engine.features import calculate_all_features, validate_no_lookahead_contract
 from daily_bias_engine.labeling import label_market_results
@@ -26,6 +26,10 @@ RAW_TABLES = [
     "overseas_ohlcv",
     "ashare_ohlcv",
 ]
+
+OVERSEAS_INDEX_SYMBOLS = ["SPX.GI", "N225.GI", "KS11.GI"]
+ASHARE_STRUCTURE_SYMBOLS = ["000016.SH", "000300.SH", "000688.SH", "399006.SZ"]
+RATE_SERIES = ["DR007.IB", "CGB10Y", "CGB30Y"]
 
 
 def default_history_range(
@@ -52,7 +56,7 @@ class SnapshotInfo:
 
 
 def fetch_raw_inputs(
-    client: WindDataClient,
+    client: MarketDataClient,
     start_date: str,
     end_date: str,
 ) -> dict[str, pd.DataFrame]:
@@ -63,10 +67,10 @@ def fetch_raw_inputs(
         "index_ohlcv": client.get_daily_ohlcv(["000300.SH"], start_date, end_date),
         "futures_ohlcv": client.get_daily_ohlcv(["IF.CFE"], start_date, end_date),
         "open_interest": client.get_futures_open_interest(["IF.CFE"], start_date, end_date),
-        "rates": client.get_interest_rates(["DR007.IB", "CGB10Y.IB"], start_date, end_date),
+        "rates": client.get_interest_rates(RATE_SERIES, start_date, end_date),
         "etf_flow": etf_flow,
-        "overseas_ohlcv": client.get_daily_ohlcv(["SPX.GI", "HSI.HI"], start_date, end_date),
-        "ashare_ohlcv": client.get_daily_ohlcv(["000300.SH", "000905.SH", "000852.SH"], start_date, end_date),
+        "overseas_ohlcv": client.get_daily_ohlcv(OVERSEAS_INDEX_SYMBOLS, start_date, end_date),
+        "ashare_ohlcv": client.get_daily_ohlcv(ASHARE_STRUCTURE_SYMBOLS, start_date, end_date),
     }
 
 
@@ -84,7 +88,7 @@ def _latest_business_day(date_value: str | pd.Timestamp | None = None) -> pd.Tim
 
 
 def run_pipeline_from_client(
-    client: WindDataClient,
+    client: MarketDataClient,
     start_date: str,
     end_date: str,
     config_dir: Path | str,

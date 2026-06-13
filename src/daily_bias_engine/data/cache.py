@@ -26,7 +26,7 @@ def _safe_part(value: str) -> str:
 class RawDataCache:
     """Append-only Parquet cache for raw source snapshots."""
 
-    root: Path | str = Path("data/raw/wind")
+    root: Path | str = Path("data/raw/ifind")
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "root", Path(self.root))

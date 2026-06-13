@@ -1,4 +1,4 @@
-"""Wind data interfaces and WindPy implementation."""
+"""Market-data interfaces and legacy WindPy implementation."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import pandas as pd
 from daily_bias_engine.data.cache import RawDataCache
 
 
-class WindDataClient(ABC):
-    """Interface for Wind-like market data clients."""
+class MarketDataClient(ABC):
+    """Interface for localizable market data clients."""
 
     @abstractmethod
     def get_daily_ohlcv(
@@ -42,12 +42,12 @@ class WindDataClient(ABC):
         """Return daily interest-rate series."""
 
 
-class WindDataError(RuntimeError):
-    """Raised when WindPy is unavailable, disconnected, or returns an error."""
+class MarketDataError(RuntimeError):
+    """Raised when a market-data provider is unavailable or returns an error."""
 
 
 @dataclass
-class WindPyDataClient(WindDataClient):
+class WindPyDataClient(MarketDataClient):
     """WindPy-backed data client.
 
     The Wind terminal must be installed, running, and logged in before calls can
@@ -161,7 +161,7 @@ class WindPyDataClient(WindDataClient):
     ) -> Any:
         try:
             return self._wsd(name, ["close"], start_date, end_date, options="")
-        except WindDataError as wsd_error:
+        except MarketDataError as wsd_error:
             wind = self._wind()
             result = wind.edb(
                 name,
@@ -170,7 +170,7 @@ class WindPyDataClient(WindDataClient):
                 "",
             )
             if getattr(result, "ErrorCode", 0) != 0:
-                raise WindDataError(
+                raise MarketDataError(
                     f"Wind rate request failed for {name}: wsd={wsd_error}; edb ErrorCode={result.ErrorCode}"
                 ) from wsd_error
             return result
@@ -179,17 +179,17 @@ class WindPyDataClient(WindDataClient):
         try:
             from WindPy import w
         except ImportError as exc:
-            raise WindDataError("WindPy is not installed or not importable.") from exc
+            raise MarketDataError("WindPy is not installed or not importable.") from exc
 
         start_result = w.start()
         if getattr(start_result, "ErrorCode", 0) != 0:
-            raise WindDataError(f"WindPy login/start failed: ErrorCode={start_result.ErrorCode}; Data={start_result.Data}")
+            raise MarketDataError(f"WindPy login/start failed: ErrorCode={start_result.ErrorCode}; Data={start_result.Data}")
         return w
 
     @staticmethod
     def _raise_for_error(method: str, symbol: str, result: Any) -> None:
         if getattr(result, "ErrorCode", 0) != 0:
-            raise WindDataError(f"Wind {method} failed for {symbol}: ErrorCode={result.ErrorCode}")
+            raise MarketDataError(f"Wind {method} failed for {symbol}: ErrorCode={result.ErrorCode}")
 
     def _cache(
         self,
@@ -216,3 +216,7 @@ def _value_at(data: Sequence[Sequence[Any]], field_index: int, row_index: int) -
     if value is None:
         return pd.NA
     return value
+
+
+WindDataClient = MarketDataClient
+WindDataError = MarketDataError

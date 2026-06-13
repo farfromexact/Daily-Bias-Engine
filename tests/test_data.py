@@ -4,7 +4,7 @@ import types
 
 import pandas as pd
 
-from daily_bias_engine.data import IFindDataClient, RawDataCache, WindDataError, WindPyDataClient
+from daily_bias_engine.data import IFindDataClient, RawDataCache
 
 
 def test_raw_data_cache_writes_append_only_snapshots(tmp_path: Path) -> None:
@@ -26,17 +26,6 @@ def test_raw_data_cache_writes_append_only_snapshots(tmp_path: Path) -> None:
     assert second_path.exists()
     assert len(cache.list_snapshots("daily_ohlcv", request)) == 2
     pd.testing.assert_frame_equal(cache.read_snapshot(first_path), frame)
-
-
-def test_windpy_client_reports_connection_errors() -> None:
-    client = WindPyDataClient()
-
-    try:
-        frame = client.get_daily_ohlcv(["000300.SH"], "2024-04-29", "2024-04-30")
-    except WindDataError as exc:
-        assert "WindPy" in str(exc) or "Wind" in str(exc)
-    else:
-        assert set(["date", "symbol", "open", "high", "low", "close", "volume", "amount", "asof_time"]).issubset(frame.columns)
 
 
 def test_ifind_client_maps_project_symbols(monkeypatch) -> None:
@@ -80,11 +69,59 @@ def test_ifind_client_maps_project_symbols(monkeypatch) -> None:
     monkeypatch.setenv("IFIND_PASSWORD", "password")
 
     client = IFindDataClient()
-    frame = client.get_daily_ohlcv(["IF.CFE", "HSI.HI"], "2026-06-12", "2026-06-12")
+    frame = client.get_daily_ohlcv(["IF.CFE", "N225.GI", "KS11.GI"], "2026-06-12", "2026-06-12")
     client.close()
 
-    assert calls == ["IF00.CFE", "HSI.HK"]
-    assert sorted(frame["symbol"].tolist()) == ["HSI.HI", "IF.CFE"]
+    assert calls == ["IF00.CFE", "N225.GI", "KS11.GI"]
+    assert sorted(frame["symbol"].tolist()) == ["IF.CFE", "KS11.GI", "N225.GI"]
     assert set(["date", "symbol", "open", "high", "low", "close", "volume", "amount", "asof_time", "source"]).issubset(
         frame.columns
     )
+
+
+def test_ifind_client_fetches_edb_yield_series(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def login(username: str, password: str) -> int:
+        return 0
+
+    def logout() -> int:
+        return 0
+
+    def edb(indicator_id: str, *_args: object):
+        calls.append(indicator_id)
+        names = {
+            "L001618299": "中债国债到期收益率:30年",
+            "L001619604": "中债国债到期收益率:10年",
+        }
+        return types.SimpleNamespace(
+            errorcode=0,
+            errmsg="",
+            data=pd.DataFrame(
+                [
+                    {
+                        "time": "2026-06-12",
+                        "index_name": names[indicator_id],
+                        "value": 2.2215 if indicator_id == "L001618299" else 1.7427,
+                    }
+                ]
+            ),
+        )
+
+    module = types.SimpleNamespace(
+        THS_iFinDLogin=login,
+        THS_iFinDLogout=logout,
+        THS_GetErrorInfo=lambda code: f"error {code}",
+        THS_EDB=edb,
+    )
+    monkeypatch.setitem(sys.modules, "iFinDPy", module)
+    monkeypatch.setenv("IFIND_USERNAME", "user")
+    monkeypatch.setenv("IFIND_PASSWORD", "password")
+
+    client = IFindDataClient()
+    frame = client.get_interest_rates(["CGB10Y", "CGB30Y"], "2026-06-12", "2026-06-12")
+    client.close()
+
+    assert calls == ["L001619604", "L001618299"]
+    assert frame.set_index("series")["rate"].to_dict() == {"CGB10Y": 1.7427, "CGB30Y": 2.2215}
+    assert set(frame["source"]) == {"ifind_edb"}

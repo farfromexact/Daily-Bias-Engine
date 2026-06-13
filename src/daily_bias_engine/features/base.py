@@ -21,14 +21,14 @@ FACTOR_COLUMNS = [
 FACTOR_DATA_SOURCES = {
     "equity_index_futures_basis": "Market-data daily close: IF.CFE and 000300.SH",
     "futures_open_interest_momentum": "Market-data futures open interest: IF.CFE oi",
-    "rates_change_5d": "Market-data interest rate series: DR007.IB and CGB10Y.IB when available",
-    "yield_curve_slope": "Market-data interest rate spread when available",
+    "rates_change_5d": "iFinD funding rate series: DR007.IB 5-day change",
+    "yield_curve_slope": "iFinD EDB spread: CGB30Y - CGB10Y using L001618299 and L001619604",
     "etf_flow_proxy": "Market-data ETF daily amount: 510300.SH and 510500.SH",
     "margin_balance_momentum": "Derived proxy from ETF amount until real margin balance is connected",
-    "overseas_market_momentum": "Market-data overseas daily prices: SPX.GI and HSI.HI",
-    "overseas_volatility_pressure": "Market-data overseas high-low range proxy: SPX.GI and HSI.HI",
-    "ashare_breadth_proxy": "Market-data A-share index daily open and close prices",
-    "ashare_turnover_momentum": "Market-data A-share index daily volume",
+    "overseas_market_momentum": "Market-data overseas daily prices: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",
+    "overseas_volatility_pressure": "Market-data overseas high-low range proxy: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",
+    "ashare_breadth_proxy": "Market-data A-share daily open and close prices: SSE50, CSI300, STAR 50, ChiNext",
+    "ashare_turnover_momentum": "Market-data A-share daily volume: SSE50, CSI300, STAR 50, ChiNext",
 }
 
 

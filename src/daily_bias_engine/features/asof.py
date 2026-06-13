@@ -44,7 +44,7 @@ def validate_no_lookahead_contract(
     factors: pd.DataFrame,
     market_results: pd.DataFrame | None = None,
     decision_time: str = "09:20:00",
-    overseas_markers: Iterable[str] = ("overseas", "SPX", "HSI", "A50", "VIX", "CNH", "USD", "US", "HK"),
+    overseas_markers: Iterable[str] = ("overseas", "SPX", "N225", "KS11", "A50", "VIX", "CNH", "USD", "US", "JP", "KR"),
 ) -> pd.DataFrame:
     """Validate the no-lookahead contract for factor tables.
 

@@ -4,17 +4,17 @@ import numpy as np
 import pandas as pd
 
 
-def raw_wind_like_inputs(start_date: str = "2024-01-01", end_date: str = "2024-03-31") -> dict[str, pd.DataFrame]:
+def raw_ifind_like_inputs(start_date: str = "2024-01-01", end_date: str = "2024-03-31") -> dict[str, pd.DataFrame]:
     etf_flow = daily_ohlcv(["510300.SH", "510500.SH"], start_date, end_date)
     etf_flow = etf_flow.assign(margin_balance=etf_flow["amount"] * 1.2)
     return {
         "index_ohlcv": daily_ohlcv(["000300.SH"], start_date, end_date),
         "futures_ohlcv": daily_ohlcv(["IF.CFE"], start_date, end_date),
         "open_interest": futures_open_interest(["IF.CFE"], start_date, end_date),
-        "rates": interest_rates(["DR007.IB", "CGB10Y.IB"], start_date, end_date),
+        "rates": interest_rates(["DR007.IB", "CGB10Y", "CGB30Y"], start_date, end_date),
         "etf_flow": etf_flow,
-        "overseas_ohlcv": daily_ohlcv(["SPX.GI", "HSI.HI"], start_date, end_date),
-        "ashare_ohlcv": daily_ohlcv(["000300.SH", "000905.SH", "000852.SH"], start_date, end_date),
+        "overseas_ohlcv": daily_ohlcv(["SPX.GI", "N225.GI", "KS11.GI"], start_date, end_date),
+        "ashare_ohlcv": daily_ohlcv(["000016.SH", "000300.SH", "000688.SH", "399006.SZ"], start_date, end_date),
     }
 
 
@@ -37,7 +37,7 @@ def daily_ohlcv(symbols: list[str], start_date: str, end_date: str) -> pd.DataFr
                     "volume": 1_000_000 + index * 2_500,
                     "amount": round(close * (1_000_000 + index * 2_500), 2),
                     "asof_time": "16:30:00",
-                    "source": "wind_fixture",
+                    "source": "ifind_fixture",
                 }
             )
     return pd.DataFrame(rows)
@@ -56,7 +56,7 @@ def futures_open_interest(symbols: list[str], start_date: str, end_date: str) ->
                     "open_interest": base + index * 100,
                     "volume": 40_000 + index * 120,
                     "asof_time": "16:30:00",
-                    "source": "wind_fixture",
+                    "source": "ifind_fixture",
                 }
             )
     return pd.DataFrame(rows)
@@ -74,7 +74,7 @@ def interest_rates(series: list[str], start_date: str, end_date: str) -> pd.Data
                     "series": name,
                     "rate": round(base + np.sin(index / 8.0) * 0.02, 4),
                     "asof_time": "16:30:00",
-                    "source": "wind_fixture",
+                    "source": "ifind_fixture",
                 }
             )
     return pd.DataFrame(rows)
@@ -119,9 +119,9 @@ def option_chain_fixture(trade_date: str = "2026-06-07", product_group: str = "C
                     "risk_free_rate": 0.02,
                     "dividend_yield": 0.0,
                     "implied_vol": 0.22,
-                    "implied_vol_source": "wind_fixture",
+                    "implied_vol_source": "ifind_fixture",
                     "asof_time": "16:30:00",
-                    "source": "wind_fixture",
+                    "source": "ifind_fixture",
                 }
             )
     return pd.DataFrame(rows)
