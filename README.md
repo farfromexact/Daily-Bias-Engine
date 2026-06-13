@@ -96,6 +96,19 @@ product/date, and keeps the latest two iFinD market snapshots. Streamlit Cloud
 does not call iFinD directly; to refresh the deployed app, commit and push the
 updated parquet data under `data/snapshots/` and `data/options_ifind/`.
 
+## Weight Diagnostics
+
+Generate a walk-forward factor weight diagnostic report without changing
+`configs/factor_weights.yaml`:
+
+```bash
+python -m daily_bias_engine.weight_optimizer --snapshot-root data/snapshots --config-dir configs --output-dir reports/weight_optimizer
+```
+
+The report uses strict chronological walk-forward folds and writes JSON/CSV/YAML
+artifacts with current weights, optimized diagnostic weights, and
+`0.6 * current + 0.4 * optimized` blended weights for manual review.
+
 ## Project Layout
 
 ```text

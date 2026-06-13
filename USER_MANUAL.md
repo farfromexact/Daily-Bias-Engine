@@ -258,7 +258,26 @@ Get-ChildItem data\options_ifind\normalized_chain\product_group=CSI300 | Sort-Ob
 python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12 --product CSI300 --data-root data\options_ifind
 ```
 
-## 8. Streamlit 页面怎么看
+## 8. 权重诊断报告
+
+权重诊断模块只生成报告和推荐，不会覆盖 `configs/factor_weights.yaml`。
+
+运行：
+
+```powershell
+python -m daily_bias_engine.weight_optimizer --snapshot-root data\snapshots --config-dir configs --output-dir reports\weight_optimizer
+```
+
+输出内容包括：
+
+- 每一折 walk-forward 的训练区间、测试区间、各因子权重和测试指标。
+- 每个因子的 rolling IC、稳定性排名和权重波动率。
+- `current_weights`、`optimized_weights`、`blended_weights` 三套权重。
+- 约束检查结果，包括单因子、单模块、利率、ETF flow + margin proxy、`yield_curve_slope` 等限制。
+
+这些输出用于人工审阅，不会被 Streamlit 或引擎自动加载。
+
+## 9. Streamlit 页面怎么看
 
 ### Overview
 
@@ -311,7 +330,7 @@ python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12
 
 展示因子逻辑说明。若发现文字编码异常，以本文档和代码为准。
 
-## 9. 主市场分数怎么理解
+## 10. 主市场分数怎么理解
 
 总分范围：
 
@@ -335,7 +354,7 @@ score <= -30 => Risk-Off
 
 趋势日概率不是方向预测。它回答的是“当天是否更可能走出趋势结构”，而不是“涨还是跌”。趋势方向由 `trend_direction_bias` 单独表示。
 
-## 10. 当前主因子清单
+## 11. 当前主因子清单
 
 | 因子 | 模块 | 原始含义 | 方向 |
 | --- | --- | --- | --- |
@@ -358,7 +377,7 @@ score <= -30 => Risk-Off
 - 期限利差使用 `L001618299`（中债国债到期收益率:30年）减 `L001619604`（中债国债到期收益率:10年）；取不到真实 EDB 时不会伪造。
 - `margin_balance_momentum` 当前还不是两融真实余额，是用 ETF 成交额派生的 proxy。
 
-## 11. 期权状态怎么理解
+## 12. 期权状态怎么理解
 
 期权状态命令：
 
@@ -393,7 +412,7 @@ python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12
 - exposure 的方向依赖模式参数，默认报告使用当前实现的假设口径。
 - GEX、vanna、charm、vega 应作为风险结构参考，不应单独作为交易指令。
 
-## 12. 本地数据目录
+## 13. 本地数据目录
 
 | 目录 | 用途 | 是否应提交 Git |
 | --- | --- | --- |
@@ -404,7 +423,7 @@ python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12
 
 这些数据目录通常在 `.gitignore` 里忽略。仓库提交代码和配置，不提交本地行情数据和账号密码。
 
-## 13. 常见问题
+## 14. 常见问题
 
 ### 页面提示没有本地市场快照
 
@@ -464,7 +483,7 @@ python -m streamlit run apps\streamlit_app.py --server.port 8507
 
 确认最新快照是否已经写入 `data/snapshots/`。如果已经写入，刷新页面；仍旧则停止 Streamlit 后重新启动。
 
-## 14. 开发和校验
+## 15. 开发和校验
 
 跑完整测试：
 
@@ -490,9 +509,9 @@ git status --short
 - `data/raw/ifind/` 原始请求审计缓存。
 - 本地日志文件。
 
-`data/snapshots/` 和 `data/options_ifind/` 中的公开 parquet 可以按部署需要提交；GitHub Actions 会自动提交这些数据更新。
+`data/snapshots/` 和 `data/options_ifind/` 中的公开 parquet 可以按部署需要由你本地手动提交。
 
-## 15. 当前版本限制
+## 16. 当前版本限制
 
 当前系统已经可以从 iFinD 本地化主市场数据和期权链，并在 Streamlit 中展示真实数据结果。但它仍是研究系统，不是生产交易系统。
 
