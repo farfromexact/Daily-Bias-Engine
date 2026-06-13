@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 
-from apps.streamlit_app import CONFIG_DIR, _available_option_snapshots, _engine_summary_table, run_dashboard_pipeline
+from apps.streamlit_app import CONFIG_DIR, _available_option_snapshots, _date_options, _engine_summary_table, run_dashboard_pipeline
 from daily_bias_engine.pipeline import run_pipeline_from_raw, save_snapshot
 from tests.fixtures import raw_ifind_like_inputs
 
@@ -46,3 +46,13 @@ def test_engine_summary_table_shows_latest_signal_first() -> None:
     table = _engine_summary_table(scores)
 
     assert table.loc[0, "信号日期"] == "2026-06-15"
+
+
+def test_signal_date_options_are_sorted_unique() -> None:
+    scores = pd.DataFrame(
+        {
+            "date": ["2026-06-15", "2026-06-08", "2026-06-15", "2026-06-12"],
+        }
+    )
+
+    assert _date_options(scores) == ["2026-06-08", "2026-06-12", "2026-06-15"]

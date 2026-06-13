@@ -84,7 +84,14 @@ def main() -> None:
         st.error("当前数据没有可展示的信号日期。")
         return
 
-    selected_date = st.selectbox("选择信号日期", signal_dates, index=len(signal_dates) - 1)
+    latest_signal_date = signal_dates[-1]
+    snapshot_key = snapshot_info.path.name if snapshot_info is not None else "no_snapshot"
+    selected_date = st.selectbox(
+        "选择信号日期",
+        signal_dates,
+        index=len(signal_dates) - 1,
+        key=f"signal_date_{snapshot_key}_{latest_signal_date}",
+    )
     selected_row = _selected_engine_row(scores, selected_date)
     selected_explanation = selected_row.get("explanation", {}) if selected_row else {}
     selected_label = _selected_label_row(labels, selected_date)
@@ -749,7 +756,8 @@ def _engine_summary_table(scores: pd.DataFrame) -> pd.DataFrame:
 
 
 def _date_options(scores: pd.DataFrame) -> list[str]:
-    return pd.to_datetime(scores["date"]).dt.strftime("%Y-%m-%d").tolist()
+    dates = pd.to_datetime(scores["date"], errors="coerce").dropna().drop_duplicates().sort_values()
+    return dates.dt.strftime("%Y-%m-%d").tolist()
 
 
 def _selected_engine_row(scores: pd.DataFrame, selected_date: str) -> dict[str, Any]:
