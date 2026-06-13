@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from scripts.fetch_ifind_options_snapshot import _normalized_chain_path, _resolve_trade_dates
+from scripts.update_ifind_data import latest_option_date
 
 
 class CalendarClient:
@@ -30,3 +31,13 @@ def test_normalized_chain_path() -> None:
     path = _normalized_chain_path(Path("data/options_ifind"), "csi300", "2026-06-05")
 
     assert path == Path("data/options_ifind/normalized_chain/product_group=CSI300/trade_date=2026-06-05/data.parquet")
+
+
+def test_latest_option_date_reads_local_product_partitions(tmp_path: Path) -> None:
+    for trade_date in ["2026-06-05", "2026-06-12"]:
+        path = tmp_path / "normalized_chain" / "product_group=CSI300" / f"trade_date={trade_date}" / "data.parquet"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"local parquet marker")
+
+    assert latest_option_date(tmp_path, "CSI300") == pd.Timestamp("2026-06-12")
+    assert latest_option_date(tmp_path, "SSE50") is None

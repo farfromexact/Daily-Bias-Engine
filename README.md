@@ -48,8 +48,17 @@ Set `IFIND_USERNAME` and `IFIND_PASSWORD` in your local shell, then run:
 python scripts/fetch_ifind_snapshot.py
 ```
 
-By default this fetches the trailing three calendar years through the latest
-weekday and writes a local market snapshot under `data/snapshots/`.
+By default this is incremental. If a local iFinD snapshot already exists, the
+script fetches only dates after the latest raw market date, merges them with
+the existing three-year history, and writes a new full snapshot under
+`data/snapshots/`. If no local iFinD snapshot exists, it initializes the
+trailing three calendar years.
+
+Force a full rebuild when needed:
+
+```bash
+python scripts/fetch_ifind_snapshot.py --full-refresh --years 3
+```
 
 The current main-market universe is:
 
@@ -69,6 +78,24 @@ python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12
 
 The current Streamlit options tab reads local iFinD option chains under
 `data/options_ifind/`.
+
+## Automated Daily Updates
+
+The repository includes `.github/workflows/ifind_daily_update.yml`. It runs on
+GitHub Actions at 20:30 China time on weekdays and can also be triggered
+manually. Configure repository secrets named `IFIND_USERNAME` and
+`IFIND_PASSWORD`.
+
+The workflow runs:
+
+```bash
+python scripts/update_ifind_data.py
+```
+
+It updates the main market snapshot incrementally, updates option chains by
+product/date, keeps the latest two iFinD market snapshots, and commits changed
+data files back to the repository. Streamlit Cloud then reads the latest
+committed parquet snapshot.
 
 ## Project Layout
 

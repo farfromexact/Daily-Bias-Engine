@@ -30,6 +30,15 @@ RAW_TABLES = [
 OVERSEAS_INDEX_SYMBOLS = ["SPX.GI", "N225.GI", "KS11.GI"]
 ASHARE_STRUCTURE_SYMBOLS = ["000016.SH", "000300.SH", "000688.SH", "399006.SZ"]
 RATE_SERIES = ["DR007.IB", "CGB10Y", "CGB30Y"]
+RAW_DEDUP_KEYS = {
+    "index_ohlcv": ["date", "symbol"],
+    "futures_ohlcv": ["date", "symbol"],
+    "open_interest": ["date", "symbol"],
+    "rates": ["date", "series"],
+    "etf_flow": ["date", "symbol"],
+    "overseas_ohlcv": ["date", "symbol"],
+    "ashare_ohlcv": ["date", "symbol"],
+}
 
 
 def default_history_range(
@@ -72,6 +81,67 @@ def fetch_raw_inputs(
         "overseas_ohlcv": client.get_daily_ohlcv(OVERSEAS_INDEX_SYMBOLS, start_date, end_date),
         "ashare_ohlcv": client.get_daily_ohlcv(ASHARE_STRUCTURE_SYMBOLS, start_date, end_date),
     }
+
+
+def latest_raw_data_date(raw: Mapping[str, pd.DataFrame], table: str = "index_ohlcv") -> pd.Timestamp | None:
+    """Return the latest source data date in a raw table."""
+
+    frame = raw.get(table)
+    if frame is None or frame.empty or "date" not in frame.columns:
+        return None
+    dates = pd.to_datetime(frame["date"], errors="coerce").dropna()
+    if dates.empty:
+        return None
+    return dates.max().normalize()
+
+
+def merge_raw_inputs(
+    base_raw: Mapping[str, pd.DataFrame],
+    new_raw: Mapping[str, pd.DataFrame],
+    start_date: str | pd.Timestamp | None = None,
+) -> dict[str, pd.DataFrame]:
+    """Merge raw snapshot tables, keeping newer rows for duplicate keys."""
+
+    merged: dict[str, pd.DataFrame] = {}
+    trim_start = pd.Timestamp(start_date).normalize() if start_date is not None else None
+    for table in RAW_TABLES:
+        base = base_raw.get(table, pd.DataFrame()).copy()
+        incoming = new_raw.get(table, pd.DataFrame()).copy()
+        combined = _merge_raw_table(table, base, incoming)
+        if trim_start is not None and "date" in combined.columns and not combined.empty:
+            combined = combined[pd.to_datetime(combined["date"], errors="coerce") >= trim_start].copy()
+        if table == "etf_flow" and not combined.empty:
+            combined = _with_margin_balance(combined.drop(columns=["margin_balance"], errors="ignore"))
+        merged[table] = combined.reset_index(drop=True)
+    return merged
+
+
+def _merge_raw_table(table: str, base: pd.DataFrame, incoming: pd.DataFrame) -> pd.DataFrame:
+    if base.empty and incoming.empty:
+        return pd.DataFrame(columns=base.columns.union(incoming.columns))
+    frames: list[pd.DataFrame] = []
+    for order, frame in enumerate([base, incoming]):
+        if frame.empty:
+            continue
+        item = frame.copy()
+        if "date" in item.columns:
+            item["date"] = pd.to_datetime(item["date"], errors="coerce").dt.normalize()
+        item["_merge_order"] = order
+        frames.append(item)
+    if not frames:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True, sort=False)
+    keys = RAW_DEDUP_KEYS.get(table, [])
+    if keys and set(keys).issubset(combined.columns):
+        combined = combined.sort_values([*keys, "_merge_order"])
+        combined = combined.drop_duplicates(subset=keys, keep="last")
+        sort_columns = keys
+    else:
+        sort_columns = ["date"] if "date" in combined.columns else []
+    combined = combined.drop(columns=["_merge_order"], errors="ignore")
+    if sort_columns:
+        combined = combined.sort_values(sort_columns)
+    return combined.reset_index(drop=True)
 
 
 def _latest_business_day(date_value: str | pd.Timestamp | None = None) -> pd.Timestamp:

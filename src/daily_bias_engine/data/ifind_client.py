@@ -181,6 +181,8 @@ class IFindDataClient(MarketDataClient):
     ) -> None:
         if self.cache is None:
             return
+        if frame.empty:
+            return
         request = {
             "dataset": dataset,
             "names": list(names),
