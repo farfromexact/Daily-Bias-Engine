@@ -105,9 +105,18 @@ Generate a walk-forward factor weight diagnostic report without changing
 python -m daily_bias_engine.weight_optimizer --snapshot-root data/snapshots --config-dir configs --output-dir reports/weight_optimizer
 ```
 
-The report uses strict chronological walk-forward folds and writes JSON/CSV/YAML
-artifacts with current weights, optimized diagnostic weights, and
-`0.6 * current + 0.4 * optimized` blended weights for manual review.
+The report uses strict chronological walk-forward folds and writes shadow-mode
+JSON/Markdown/CSV artifacts. It separates `return_score` and `risk_score`,
+projects `raw_blended_weights` back through the constraints, and keeps
+`configs/factor_weights.yaml` untouched. The fixed latest files are:
+
+- `reports/weight_optimizer/latest_weight_diagnostics.json`
+- `reports/weight_optimizer/latest_weight_diagnostics.md`
+- `reports/weight_optimizer/walk_forward_folds.csv`
+- `reports/weight_optimizer/factor_stability.csv`
+- `reports/weight_optimizer/bucket_analysis_return.csv`
+- `reports/weight_optimizer/bucket_analysis_risk.csv`
+- `reports/weight_optimizer/regime_factor_ic.csv`
 
 ## Project Layout
 

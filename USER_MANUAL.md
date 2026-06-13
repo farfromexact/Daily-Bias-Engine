@@ -270,9 +270,11 @@ python -m daily_bias_engine.weight_optimizer --snapshot-root data\snapshots --co
 
 输出内容包括：
 
-- 每一折 walk-forward 的训练区间、测试区间、各因子权重和测试指标。
-- 每个因子的 rolling IC、稳定性排名和权重波动率。
-- `current_weights`、`optimized_weights`、`blended_weights` 三套权重。
+- 每一折 walk-forward 的训练区间、测试区间、`return_weights`、`risk_weights` 和测试指标。
+- 每个因子的 return/risk rolling IC、稳定性排名和权重波动率。
+- `current_weights`、`optimized_return_weights`、`optimized_risk_weights`、`constrained_blended_weights`。
+- `raw_blended_weights` 到 `constrained_blended_weights` 的约束投影检查。
+- return/risk score 分桶、regime diagnostics、leakage checks 和 permutation sanity check。
 - 约束检查结果，包括单因子、单模块、利率、ETF flow + margin proxy、`yield_curve_slope` 等限制。
 
 这些输出用于人工审阅，不会被 Streamlit 或引擎自动加载。

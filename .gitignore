@@ -20,3 +20,4 @@ data/snapshots_probe/
 .streamlit-options.*.log
 .wind-options-fetch*.log
 .ifind-options-fetch*.log
+reports/weight_optimizer/*/

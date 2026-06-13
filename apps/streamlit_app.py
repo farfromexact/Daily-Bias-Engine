@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import sys
 from typing import Any
@@ -31,6 +32,7 @@ from daily_bias_engine.options.reports.daily_option_state import generate_daily_
 CONFIG_DIR = PROJECT_ROOT / "configs"
 SNAPSHOT_ROOT = PROJECT_ROOT / "data" / "snapshots"
 OPTION_DATA_ROOT = PROJECT_ROOT / "data" / "options_ifind"
+WEIGHT_REPORT_ROOT = PROJECT_ROOT / "reports" / "weight_optimizer"
 
 
 def run_dashboard_pipeline(snapshot_dir: str | Path | None = None) -> dict[str, Any]:
@@ -59,6 +61,11 @@ def _cached_option_state(product_group: str, trade_date: str, data_root: str) ->
         include_plots=True,
     )
     return factors, payload, plots or {}
+
+
+@st.cache_data(show_spinner="Loading weight diagnostics...")
+def _cached_weight_diagnostics(report_path: str) -> dict[str, Any]:
+    return json.loads(Path(report_path).read_text(encoding="utf-8"))
 
 
 
@@ -99,8 +106,19 @@ def main() -> None:
 
     st.caption(_data_status_text(result, snapshot_info, scores))
 
-    overview, factors_tab, engine_tab, labels_tab, backtest_tab, backtest_diagnostics_tab, factor_diagnostics_tab, options_tab, logic_tab = st.tabs(
-        ["Overview", "Factors", "Engine", "Labels", "Backtest", "Backtest Diagnostics", "Factor Diagnostics", "Options", "Logic"]
+    overview, factors_tab, engine_tab, labels_tab, backtest_tab, backtest_diagnostics_tab, factor_diagnostics_tab, weight_diag_tab, options_tab, logic_tab = st.tabs(
+        [
+            "Overview",
+            "Factors",
+            "Engine",
+            "Labels",
+            "Backtest",
+            "Backtest Diagnostics",
+            "Factor Diagnostics",
+            "Weight Diagnostics",
+            "Options",
+            "Logic",
+        ]
     )
 
     with overview:
@@ -245,6 +263,9 @@ def main() -> None:
         else:
             st.info("当前没有足够数据生成因子五分位表现。")
 
+    with weight_diag_tab:
+        _render_weight_diagnostics_tab()
+
     with options_tab:
         _render_options_tab(_available_option_snapshots())
 
@@ -356,6 +377,58 @@ def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
         _render_option_chart("IV Term Structure", plots.get("iv_term_structure"), x_column="tenor_days", y_column="atm_iv", chart="line")
     with chart_columns[1]:
         _render_option_chart("Skew Curve", plots.get("skew_curve"), x_column="point", y_column="iv", chart="line")
+
+
+def _render_weight_diagnostics_tab(report_root: Path | str = WEIGHT_REPORT_ROOT) -> None:
+    st.subheader("Weight Diagnostics")
+    st.caption("Shadow mode only. current_weights is production; optimized weights are diagnostics; constrained_blended_weights is a shadow candidate.")
+    report_path = Path(report_root) / "latest_weight_diagnostics.json"
+    if not report_path.exists():
+        st.info(
+            "No weight diagnostics report found. Run "
+            "`python -m daily_bias_engine.weight_optimizer --snapshot-root data/snapshots --config-dir configs --output-dir reports/weight_optimizer` first."
+        )
+        return
+
+    try:
+        report = _cached_weight_diagnostics(str(report_path))
+    except Exception as exc:
+        st.error(f"Weight diagnostics report failed to load: {exc}")
+        return
+
+    recommendation = report.get("recommendation", {})
+    metric_columns = st.columns(4)
+    metric_columns[0].metric("current_weights", "production")
+    metric_columns[1].metric("optimized_weights", "diagnostic")
+    metric_columns[2].metric("constrained_blended", "shadow")
+    metric_columns[3].metric("adoption_status", str(report.get("adoption_status", "not adopted")))
+
+    st.subheader("Final recommendation")
+    st.write(recommendation.get("recommendation", "review_required"))
+    st.write(recommendation.get("should_any_weight_be_adopted_into_production_now", "No."))
+
+    st.subheader("Weight comparison")
+    st.dataframe(_weight_comparison_table(report), width="stretch", hide_index=True)
+
+    st.subheader("Constraint check")
+    st.dataframe(_constraint_check_table(report.get("constraint_checks", {})), width="stretch", hide_index=True)
+
+    st.subheader("Fold performance")
+    st.dataframe(_weight_fold_table(report.get("walk_forward_folds", [])), width="stretch", hide_index=True)
+
+    st.subheader("Factor stability")
+    st.dataframe(_weight_factor_stability_table(report.get("factor_stability", [])), width="stretch", hide_index=True)
+
+    bucket_columns = st.columns(2)
+    with bucket_columns[0]:
+        st.subheader("Return bucket analysis")
+        st.dataframe(_round_numeric(pd.DataFrame(report.get("bucket_analysis_return", []))), width="stretch", hide_index=True)
+    with bucket_columns[1]:
+        st.subheader("Risk bucket analysis")
+        st.dataframe(_round_numeric(pd.DataFrame(report.get("bucket_analysis_risk", []))), width="stretch", hide_index=True)
+
+    st.subheader("Regime diagnostics")
+    st.dataframe(_weight_regime_table(report.get("regime_diagnostics", {})), width="stretch", hide_index=True)
 
 
 def _option_payload_table(values: dict[str, Any]) -> pd.DataFrame:
@@ -975,6 +1048,110 @@ def _inverse_quality_label(value: Any, high: float, low: float) -> str:
     if number > low:
         return "偏高，需要降低"
     return "一般"
+
+
+def _weight_comparison_table(report: dict[str, Any]) -> pd.DataFrame:
+    current = report.get("current_weights", {})
+    return_weights = report.get("optimized_return_weights", {})
+    risk_weights = report.get("optimized_risk_weights", {})
+    blended = report.get("constrained_blended_weights", {})
+    factors = sorted(set(current) | set(return_weights) | set(risk_weights) | set(blended))
+    rows = []
+    for factor in factors:
+        rows.append(
+            {
+                "factor": factor,
+                "current_weights": current.get(factor),
+                "optimized_return_weights": return_weights.get(factor),
+                "optimized_risk_weights": risk_weights.get(factor),
+                "constrained_blended_weights": blended.get(factor),
+            }
+        )
+    return _round_numeric(pd.DataFrame(rows))
+
+
+def _constraint_check_table(checks: dict[str, Any]) -> pd.DataFrame:
+    rows = []
+    for name, payload in checks.items():
+        rows.append(
+            {
+                "weight_set": name,
+                "pass": bool(payload.get("pass")) if isinstance(payload, dict) else False,
+                "weight_sum": payload.get("weight_sum") if isinstance(payload, dict) else None,
+                "fail_reason": "; ".join(payload.get("violations", [])) if isinstance(payload, dict) else "invalid check",
+            }
+        )
+    return _round_numeric(pd.DataFrame(rows))
+
+
+def _weight_fold_table(folds: list[dict[str, Any]]) -> pd.DataFrame:
+    if not folds:
+        return pd.DataFrame()
+    columns = [
+        "fold",
+        "train_start",
+        "train_end",
+        "test_start",
+        "test_end",
+        "sample_count",
+        "return_score_test_ic",
+        "direction_hit_rate",
+        "strong_signal_count",
+        "strong_signal_hit_rate",
+        "big_loss_count",
+        "TP",
+        "FP",
+        "TN",
+        "FN",
+        "big_loss_capture_rate",
+        "big_loss_precision_rate",
+        "big_loss_avoidance_rate",
+        "max_drawdown_proxy",
+    ]
+    table = pd.DataFrame([{column: fold.get(column) for column in columns} for fold in folds])
+    return _round_numeric(table)
+
+
+def _weight_factor_stability_table(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    if not rows:
+        return pd.DataFrame()
+    columns = [
+        "final_stability_rank",
+        "factor_name",
+        "return_ic_mean",
+        "return_ic_abs_mean",
+        "return_ic_volatility",
+        "return_predictive_score",
+        "risk_predictive_score",
+        "weight_volatility",
+        "optimized_return_weight",
+        "optimized_risk_weight",
+        "constrained_blended_weight",
+    ]
+    existing = [column for column in columns if column in rows[0]]
+    return _round_numeric(pd.DataFrame(rows)[existing])
+
+
+def _weight_regime_table(regimes: dict[str, Any]) -> pd.DataFrame:
+    rows = []
+    for regime_type, items in regimes.items():
+        for item in items:
+            return_perf = item.get("return_score_performance", {})
+            risk_perf = item.get("risk_score_performance", {})
+            rows.append(
+                {
+                    "regime_type": regime_type,
+                    "regime": item.get("regime"),
+                    "sample_count": item.get("sample_count"),
+                    "return_ic": return_perf.get("ic"),
+                    "return_direction_hit_rate": return_perf.get("direction_hit_rate"),
+                    "risk_capture_rate": risk_perf.get("big_loss_capture_rate"),
+                    "risk_precision": risk_perf.get("precision"),
+                    "failed_factors": ", ".join(item.get("failed_factors", [])),
+                    "effective_factors": ", ".join(item.get("regime_effective_factors", [])),
+                }
+            )
+    return _round_numeric(pd.DataFrame(rows))
 
 
 def _round_numeric(table: pd.DataFrame) -> pd.DataFrame:

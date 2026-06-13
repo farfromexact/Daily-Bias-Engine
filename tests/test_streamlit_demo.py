@@ -1,7 +1,16 @@
-import pytest
 import pandas as pd
+import pytest
 
-from apps.streamlit_app import CONFIG_DIR, _available_option_snapshots, _date_options, _engine_summary_table, run_dashboard_pipeline
+from apps.streamlit_app import (
+    CONFIG_DIR,
+    _available_option_snapshots,
+    _constraint_check_table,
+    _date_options,
+    _engine_summary_table,
+    _weight_comparison_table,
+    _weight_fold_table,
+    run_dashboard_pipeline,
+)
 from daily_bias_engine.pipeline import run_pipeline_from_raw, save_snapshot
 from tests.fixtures import raw_ifind_like_inputs
 
@@ -56,3 +65,32 @@ def test_signal_date_options_are_sorted_unique() -> None:
     )
 
     assert _date_options(scores) == ["2026-06-08", "2026-06-12", "2026-06-15"]
+
+
+def test_weight_diagnostics_tables_render_shadow_report() -> None:
+    report = {
+        "current_weights": {"factor_a": 0.6, "factor_b": 0.4},
+        "optimized_return_weights": {"factor_a": 0.4, "factor_b": 0.6},
+        "optimized_risk_weights": {"factor_a": 0.2, "factor_b": 0.8},
+        "constrained_blended_weights": {"factor_a": 0.52, "factor_b": 0.48},
+        "constraint_checks": {
+            "constrained_blended_weights": {"pass": True, "weight_sum": 1.0, "violations": []},
+            "raw_blended_weights": {"pass": False, "weight_sum": 1.1, "violations": ["weights_sum=1.1"]},
+        },
+        "walk_forward_folds": [
+            {
+                "fold": 0,
+                "train_start": "2024-01-01",
+                "train_end": "2024-02-01",
+                "test_start": "2024-02-02",
+                "test_end": "2024-02-09",
+                "sample_count": 5,
+                "direction_hit_rate": 0.6,
+                "strong_signal_count": 2,
+            }
+        ],
+    }
+
+    assert "constrained_blended_weights" in _weight_comparison_table(report).columns
+    assert _constraint_check_table(report["constraint_checks"]).loc[0, "pass"] in {True, False}
+    assert _weight_fold_table(report["walk_forward_folds"]).loc[0, "sample_count"] == 5

@@ -1,0 +1,104 @@
+note: Review only. Do not copy blindly; this file is not loaded by the engine.
+adoption_status: not adopted until manually approved
+current_weights:
+  equity_index_futures_basis: 0.15
+  futures_open_interest_momentum: 0.1
+  rates_change_5d: 0.1
+  yield_curve_slope: 0.1
+  etf_flow_proxy: 0.1
+  margin_balance_momentum: 0.1
+  overseas_market_momentum: 0.12
+  overseas_volatility_pressure: 0.08
+  ashare_breadth_proxy: 0.09
+  ashare_turnover_momentum: 0.06
+optimized_return_weights:
+  equity_index_futures_basis: 0.06230519319259532
+  futures_open_interest_momentum: 0.25
+  rates_change_5d: 0.036025832376462855
+  yield_curve_slope: 0.008469266768524643
+  etf_flow_proxy: 0.07943625577020265
+  margin_balance_momentum: 0.07056374422979736
+  overseas_market_momentum: 0.25
+  overseas_volatility_pressure: 0.09999999999999996
+  ashare_breadth_proxy: 0.0
+  ashare_turnover_momentum: 0.14319970766147974
+optimized_risk_weights:
+  equity_index_futures_basis: 0.09252604894024416
+  futures_open_interest_momentum: 0.058536637061240356
+  rates_change_5d: 0.037123176339455964
+  yield_curve_slope: 0.06708905221437987
+  etf_flow_proxy: 0.0842066806872028
+  margin_balance_momentum: 0.0657933193127972
+  overseas_market_momentum: 0.2098377849665777
+  overseas_volatility_pressure: 0.14016221503342227
+  ashare_breadth_proxy: 0.10702723438123732
+  ashare_turnover_momentum: 0.13769785106258134
+raw_blended_weights:
+  equity_index_futures_basis: 0.11492207727703813
+  futures_open_interest_momentum: 0.16
+  rates_change_5d: 0.07441033295058513
+  yield_curve_slope: 0.06338770670740985
+  etf_flow_proxy: 0.09177450230808107
+  margin_balance_momentum: 0.08822549769191894
+  overseas_market_momentum: 0.172
+  overseas_volatility_pressure: 0.088
+  ashare_breadth_proxy: 0.054
+  ashare_turnover_momentum: 0.0932798830645919
+constrained_blended_weights:
+  equity_index_futures_basis: 0.12450613748519881
+  futures_open_interest_momentum: 0.20685247834738557
+  rates_change_5d: 0.04856383140413205
+  yield_curve_slope: 0.03825829211341839
+  etf_flow_proxy: 0.07957260967614896
+  margin_balance_momentum: 0.06939465731974707
+  overseas_market_momentum: 0.25
+  overseas_volatility_pressure: 0.06304194929208529
+  ashare_breadth_proxy: 0.030504315821499234
+  ashare_turnover_momentum: 0.08930572853940308
+constraint_checks:
+  current_weights:
+    pass: false
+    violations:
+    - rates_change_5d exceeds cap 5.00%
+    - ETF flow + margin proxy exceeds cap 15.00%
+    weight_sum: 1.0
+  optimized_return_weights:
+    pass: true
+    violations: []
+    weight_sum: 0.9999999999990625
+  optimized_risk_weights:
+    pass: true
+    violations: []
+    weight_sum: 0.999999999999139
+  raw_blended_weights:
+    pass: false
+    violations:
+    - rates_change_5d exceeds cap 5.00%
+    - ETF flow + margin proxy exceeds cap 15.00%
+    weight_sum: 0.999999999999625
+  constrained_blended_weights:
+    pass: true
+    violations: []
+    weight_sum: 0.9999999999990185
+recommendation:
+  recommendation: shadow_only
+  can_this_optimizer_improve_return_prediction: No. Out-of-sample direction hit rate
+    is not above 52%.
+  can_this_optimizer_improve_risk_filtering: Yes, risk filtering is useful, but crash
+    prediction is limited.
+  should_any_weight_be_adopted_into_production_now: No. Nothing should be adopted
+    into production automatically.
+  strong_signal_status: sufficient_sample_review_needed
+  risk_filter_note: Model behaves more like a broad risk filter than a crash predictor.
+  negative_return_ic_factors_do_not_raise_return_weight:
+  - ashare_breadth_proxy
+  - yield_curve_slope
+  risk_score_only_candidates: []
+  do:
+  - Use constrained_blended_weights only as a shadow candidate.
+  - Review risk_score separately from return_score.
+  - Require manual approval before editing configs/factor_weights.yaml.
+  do_not:
+  - Do not deploy optimized_return_weights directly.
+  - Do not interpret high abs IC with negative mean IC as return predictive power.
+  - Do not treat small-sample strong signal hit rates as stable.
