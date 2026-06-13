@@ -79,29 +79,22 @@ python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12
 The current Streamlit options tab reads local iFinD option chains under
 `data/options_ifind/`.
 
-## Automated Daily Updates
+## Local Daily Updates
 
-The repository includes `.github/workflows/ifind_daily_update.yml`. It runs on
-GitHub Actions at 20:30 China time on weekdays and can also be triggered
-manually. Configure repository secrets named `IFIND_USERNAME` and
-`IFIND_PASSWORD`.
+The project does not fetch iFinD data from GitHub Actions. Run the update from
+a local machine that has the iFinD terminal/API environment and can import
+`iFinDPy`.
 
-iFinD's Python SDK is not available from public PyPI and normally depends on a
-local iFinD terminal/API installation. The workflow therefore runs on a Windows
-self-hosted runner, not on GitHub-hosted `windows-latest`. The runner machine
-must have Python on `PATH` and `python -c "import iFinDPy"` must succeed before
-the scheduled workflow can fetch data.
-
-The workflow runs:
+Daily local entry point:
 
 ```bash
 python scripts/update_ifind_data.py
 ```
 
 It updates the main market snapshot incrementally, updates option chains by
-product/date, keeps the latest two iFinD market snapshots, and commits changed
-data files back to the repository. Streamlit Cloud then reads the latest
-committed parquet snapshot.
+product/date, and keeps the latest two iFinD market snapshots. Streamlit Cloud
+does not call iFinD directly; to refresh the deployed app, commit and push the
+updated parquet data under `data/snapshots/` and `data/options_ifind/`.
 
 ## Project Layout
 
