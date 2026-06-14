@@ -26,7 +26,6 @@ from daily_bias_engine.features import factor_logic_rows
 from daily_bias_engine.pipeline import (
     SnapshotInfo,
     list_snapshots,
-    load_snapshot_outputs,
     run_pipeline_from_snapshot,
 )
 from daily_bias_engine.options.reports.daily_option_state import generate_daily_option_state
@@ -46,7 +45,7 @@ def run_dashboard_pipeline(snapshot_dir: str | Path | None = None) -> dict[str, 
             raise FileNotFoundError(f"No local market snapshot found under {SNAPSHOT_ROOT}.")
         snapshot_dir = snapshots[0].path
     try:
-        return load_snapshot_outputs(snapshot_dir=snapshot_dir, data_mode="snapshot")
+        return _load_dashboard_snapshot_outputs(snapshot_dir)
     except Exception as exc:
         result = run_pipeline_from_snapshot(snapshot_dir=snapshot_dir, config_dir=CONFIG_DIR)
         result["snapshot_load_mode"] = "raw_fallback"
@@ -55,6 +54,30 @@ def run_dashboard_pipeline(snapshot_dir: str | Path | None = None) -> dict[str, 
             f"recalculated from raw snapshot data. Detail: {exc}"
         )
         return result
+
+
+def _load_dashboard_snapshot_outputs(snapshot_dir: str | Path) -> dict[str, Any]:
+    output_dir = Path(snapshot_dir) / "outputs"
+    paths = {
+        "factors": output_dir / "factor_daily.parquet",
+        "scores": output_dir / "bias_daily.parquet",
+        "labels": output_dir / "market_result_daily.parquet",
+        "metrics": output_dir / "metrics.json",
+        "report": output_dir / "report.json",
+    }
+    missing = [str(path) for path in paths.values() if not path.exists()]
+    if missing:
+        raise FileNotFoundError(f"Snapshot is missing precomputed outputs: {missing}")
+    return {
+        "factors": pd.read_parquet(paths["factors"]),
+        "scores": pd.read_parquet(paths["scores"]),
+        "labels": pd.read_parquet(paths["labels"]),
+        "metrics": json.loads(paths["metrics"].read_text(encoding="utf-8")),
+        "report": json.loads(paths["report"].read_text(encoding="utf-8")),
+        "data_mode": "snapshot",
+        "raw": {},
+        "snapshot_load_mode": "outputs",
+    }
 
 
 @st.cache_data(show_spinner="Loading local market snapshot...")
