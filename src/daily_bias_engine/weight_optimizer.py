@@ -151,7 +151,16 @@ def generate_weight_diagnostic_report(
         index_ohlcv=index_ohlcv,
     )
     leakage_checks = _leakage_checks(factor_daily, model, folds)
-    permutation = _permutation_sanity_check(model, factor_daily, factor_names, current, groups, availability, cfg)
+    permutation = _permutation_sanity_check(
+        model,
+        factor_daily,
+        factor_names,
+        current,
+        groups,
+        availability,
+        cfg,
+        real_folds=folds,
+    )
 
     constraint_checks = {
         "current_weights": _constraint_check(current, groups, cfg, availability),
@@ -1008,8 +1017,18 @@ def _permutation_sanity_check(
     groups: Mapping[str, str],
     availability: pd.DataFrame,
     cfg: WeightOptimizerConfig,
+    real_folds: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    real_folds, _, _, _ = _run_walk_forward(model, factor_daily, factor_names, current_weights, groups, availability, cfg)
+    if real_folds is None:
+        real_folds, _, _, _ = _run_walk_forward(
+            model,
+            factor_daily,
+            factor_names,
+            current_weights,
+            groups,
+            availability,
+            cfg,
+        )
     real_hit = _mean_metric(real_folds, "direction_hit_rate")
     real_capture = _mean_metric(real_folds, "big_loss_capture_rate")
     rng = np.random.default_rng(cfg.permutation_seed)

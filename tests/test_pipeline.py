@@ -5,6 +5,7 @@ from daily_bias_engine.pipeline import (
     fetch_raw_inputs,
     default_history_range,
     latest_raw_data_date,
+    load_snapshot_outputs,
     load_snapshot_raw,
     merge_raw_inputs,
     run_pipeline_from_raw,
@@ -82,6 +83,21 @@ def test_merge_raw_inputs_dedupes_with_new_values_and_trims_history() -> None:
     assert rates[pd.Timestamp("2026-06-02")] == 1.85
     assert merged["etf_flow"]["margin_balance"].tolist() != [999.0, 999.0]
     assert latest_raw_data_date(merged) == pd.Timestamp("2026-06-03")
+
+
+def test_load_snapshot_outputs_reads_precomputed_tables(tmp_path) -> None:
+    result = run_pipeline_from_raw(raw_ifind_like_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="ifind")
+    snapshot_dir = save_snapshot(result, tmp_path, source="ifind", start_date="2024-01-01", end_date="2024-02-29")
+
+    loaded = load_snapshot_outputs(snapshot_dir)
+
+    assert loaded["snapshot_load_mode"] == "outputs"
+    assert loaded["raw"] == {}
+    assert len(loaded["factors"]) == len(result["factors"])
+    assert len(loaded["scores"]) == len(result["scores"])
+    assert len(loaded["labels"]) == len(result["labels"])
+    assert loaded["metrics"]["observations"] == result["metrics"]["observations"]
+    assert loaded["report"]["latest"]["date"] == result["report"]["latest"]["date"]
 
 
 def test_ifind_snapshot_update_skips_when_base_already_covers_target(tmp_path) -> None:

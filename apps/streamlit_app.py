@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, Mapping
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -25,6 +26,7 @@ from daily_bias_engine.features import factor_logic_rows
 from daily_bias_engine.pipeline import (
     SnapshotInfo,
     list_snapshots,
+    load_snapshot_outputs,
     run_pipeline_from_snapshot,
 )
 from daily_bias_engine.options.reports.daily_option_state import generate_daily_option_state
@@ -43,7 +45,16 @@ def run_dashboard_pipeline(snapshot_dir: str | Path | None = None) -> dict[str, 
         if not snapshots:
             raise FileNotFoundError(f"No local market snapshot found under {SNAPSHOT_ROOT}.")
         snapshot_dir = snapshots[0].path
-    return run_pipeline_from_snapshot(snapshot_dir=snapshot_dir, config_dir=CONFIG_DIR)
+    try:
+        return load_snapshot_outputs(snapshot_dir=snapshot_dir, data_mode="snapshot")
+    except Exception as exc:
+        result = run_pipeline_from_snapshot(snapshot_dir=snapshot_dir, config_dir=CONFIG_DIR)
+        result["snapshot_load_mode"] = "raw_fallback"
+        result["snapshot_load_warning"] = (
+            "Precomputed snapshot outputs were unavailable or invalid; "
+            f"recalculated from raw snapshot data. Detail: {exc}"
+        )
+        return result
 
 
 @st.cache_data(show_spinner="Loading local market snapshot...")
@@ -64,7 +75,8 @@ def _cached_option_state(product_group: str, trade_date: str, data_root: str) ->
 
 
 @st.cache_data(show_spinner="Loading weight diagnostics...")
-def _cached_weight_diagnostics(report_path: str) -> dict[str, Any]:
+def _cached_weight_diagnostics(report_path: str, report_mtime_ns: int) -> dict[str, Any]:
+    _ = report_mtime_ns
     return json.loads(Path(report_path).read_text(encoding="utf-8"))
 
 
@@ -151,7 +163,7 @@ def main() -> None:
             st.dataframe(_drivers_table(selected_explanation.get("negative_drivers", [])), width="stretch", hide_index=True)
 
         st.subheader("风险硬标记")
-        risk_flags = selected_row.get("risk_flags_json", []) if selected_row else []
+        risk_flags = _record_list(selected_row.get("risk_flags_json", [])) if selected_row else []
         if risk_flags:
             st.dataframe(_risk_flags_table(risk_flags), width="stretch", hide_index=True)
         else:
@@ -179,7 +191,7 @@ def main() -> None:
         st.dataframe(_sub_scores_table(selected_row.get("sub_scores", {}) if selected_row else {}), width="stretch", hide_index=True)
 
         st.subheader("风险硬标记")
-        risk_flags = selected_row.get("risk_flags_json", []) if selected_row else []
+        risk_flags = _record_list(selected_row.get("risk_flags_json", [])) if selected_row else []
         if risk_flags:
             st.dataframe(_risk_flags_table(risk_flags), width="stretch", hide_index=True)
         else:
@@ -391,12 +403,17 @@ def _render_weight_diagnostics_tab(report_root: Path | str = WEIGHT_REPORT_ROOT)
         return
 
     try:
-        report = _cached_weight_diagnostics(str(report_path))
+        report = _cached_weight_diagnostics(str(report_path), report_path.stat().st_mtime_ns)
     except Exception as exc:
         st.error(f"Weight diagnostics report failed to load: {exc}")
         return
 
     recommendation = report.get("recommendation", {})
+    oos_summary = report.get("oos_summary", {})
+    st.caption(
+        f"Report created: {report.get('created_at', 'N/A')} | "
+        f"OOS samples: {oos_summary.get('sample_count', 'N/A')}"
+    )
     metric_columns = st.columns(4)
     metric_columns[0].metric("current_weights", "production")
     metric_columns[1].metric("optimized_weights", "diagnostic")
@@ -437,7 +454,7 @@ def _option_payload_table(values: dict[str, Any]) -> pd.DataFrame:
 
 
 def _option_display_value(value: Any) -> str:
-    if value is None or (not isinstance(value, bool) and pd.isna(value)):
+    if not isinstance(value, bool) and _is_missing_scalar(value):
         return "N/A"
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -506,7 +523,7 @@ def _load_dashboard_data(snapshot_info: SnapshotInfo | None) -> tuple[dict[str, 
         return None, f"No local market snapshot found under {SNAPSHOT_ROOT}. Run `python scripts/fetch_ifind_snapshot.py` first."
     try:
         result = _cached_dashboard_result(str(snapshot_info.path))
-        return result, ""
+        return result, str(result.get("snapshot_load_warning", ""))
     except Exception as exc:
         return None, f"Local market snapshot read failed: {exc}"
 
@@ -856,11 +873,12 @@ def _sub_scores_table(sub_scores: dict[str, Any]) -> pd.DataFrame:
     return _round_numeric(pd.DataFrame(rows).sort_values("分项分", ascending=False))
 
 
-def _risk_flags_table(risk_flags: list[dict[str, Any]]) -> pd.DataFrame:
-    if not risk_flags:
+def _risk_flags_table(risk_flags: Any) -> pd.DataFrame:
+    records = _record_list(risk_flags)
+    if not records:
         return pd.DataFrame(columns=["风险类型", "因子", "模块", "因子分", "触发阈值", "含义"])
     rows = []
-    for flag in risk_flags:
+    for flag in records:
         rows.append(
             {
                 "风险类型": "硬 Risk-Off",
@@ -874,10 +892,11 @@ def _risk_flags_table(risk_flags: list[dict[str, Any]]) -> pd.DataFrame:
     return _round_numeric(pd.DataFrame(rows))
 
 
-def _drivers_table(drivers: list[dict[str, Any]]) -> pd.DataFrame:
-    if not drivers:
+def _drivers_table(drivers: Any) -> pd.DataFrame:
+    records = _record_list(drivers)
+    if not records:
         return pd.DataFrame(columns=["因子", "模块", "因子分", "贡献", "原始值", "z-score"])
-    table = pd.DataFrame(drivers).rename(
+    table = pd.DataFrame(records).rename(
         columns={
             "factor_name": "因子",
             "group": "模块",
@@ -891,10 +910,11 @@ def _drivers_table(drivers: list[dict[str, Any]]) -> pd.DataFrame:
     return _round_numeric(table[["因子", "模块", "因子分", "贡献", "原始值", "z-score"]])
 
 
-def _factor_contribution_table(factors: list[dict[str, Any]]) -> pd.DataFrame:
-    if not factors:
+def _factor_contribution_table(factors: Any) -> pd.DataFrame:
+    records = _record_list(factors)
+    if not records:
         return pd.DataFrame(columns=["数据日期", "因子", "模块", "方向分", "因子分", "权重", "贡献", "原始值", "z-score"])
-    table = pd.DataFrame(factors).rename(
+    table = pd.DataFrame(records).rename(
         columns={
             "data_date": "数据日期",
             "factor_name": "因子",
@@ -1161,14 +1181,41 @@ def _round_numeric(table: pd.DataFrame) -> pd.DataFrame:
     return output
 
 
+def _record_list(value: Any) -> list[dict[str, Any]]:
+    if _is_missing_scalar(value):
+        return []
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+    if isinstance(value, pd.Series):
+        value = value.tolist()
+    if isinstance(value, Mapping):
+        return [dict(value)]
+    if isinstance(value, tuple):
+        value = list(value)
+    if isinstance(value, list):
+        return [dict(item) for item in value if isinstance(item, Mapping)]
+    return []
+
+
+def _is_missing_scalar(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, (Mapping, list, tuple, pd.Series, pd.DataFrame, np.ndarray)):
+        return False
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
+
+
 def _format_percent(value: Any) -> str:
-    if value is None or pd.isna(value):
+    if _is_missing_scalar(value):
         return "N/A"
     return f"{float(value) * 100:.1f}%"
 
 
 def _format_float(value: Any) -> str:
-    if value is None or pd.isna(value):
+    if _is_missing_scalar(value):
         return "N/A"
     return f"{float(value):.3f}"
 
@@ -1206,11 +1253,12 @@ def _raw_score_bias(total_score: Any) -> str:
     return "Neutral"
 
 
-def _override_reason_from_flags(risk_flags: list[dict[str, Any]]) -> str:
-    if not risk_flags:
+def _override_reason_from_flags(risk_flags: Any) -> str:
+    records = _record_list(risk_flags)
+    if not records:
         return ""
     reasons = []
-    for flag in risk_flags:
+    for flag in records:
         factor_name = flag.get("factor_name", "unknown_factor")
         factor_score = _format_float(flag.get("factor_score"))
         threshold = _format_float(flag.get("threshold"))

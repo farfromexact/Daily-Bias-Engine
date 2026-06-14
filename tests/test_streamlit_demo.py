@@ -1,12 +1,16 @@
 import pandas as pd
 import pytest
+import numpy as np
 
 from apps.streamlit_app import (
     CONFIG_DIR,
     _available_option_snapshots,
     _constraint_check_table,
     _date_options,
+    _drivers_table,
     _engine_summary_table,
+    _factor_contribution_table,
+    _risk_flags_table,
     _weight_comparison_table,
     _weight_fold_table,
     run_dashboard_pipeline,
@@ -25,6 +29,36 @@ def test_streamlit_pipeline_reads_local_snapshot_without_launching_ui(tmp_path) 
     assert not loaded["labels"].empty
     assert loaded["metrics"]["observations"] > 0
     assert loaded["report"]["latest"]["bias_label"] in {"Risk-On", "Neutral", "Risk-Off"}
+
+
+def test_streamlit_pipeline_prefers_precomputed_outputs(tmp_path, monkeypatch) -> None:
+    import apps.streamlit_app as streamlit_app
+
+    result = run_pipeline_from_raw(raw_ifind_like_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="snapshot")
+    snapshot_dir = save_snapshot(result, tmp_path, source="ifind_fixture", start_date="2024-01-01", end_date="2024-02-29")
+
+    def fail_recalculation(*_args, **_kwargs):
+        raise AssertionError("Streamlit should not recalculate when snapshot outputs exist.")
+
+    monkeypatch.setattr(streamlit_app, "run_pipeline_from_snapshot", fail_recalculation)
+
+    loaded = streamlit_app.run_dashboard_pipeline(snapshot_dir=snapshot_dir)
+
+    assert loaded["snapshot_load_mode"] == "outputs"
+    assert loaded["raw"] == {}
+    assert not loaded["scores"].empty
+
+
+def test_streamlit_pipeline_falls_back_to_raw_when_outputs_are_missing(tmp_path) -> None:
+    result = run_pipeline_from_raw(raw_ifind_like_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="snapshot")
+    snapshot_dir = save_snapshot(result, tmp_path, source="ifind_fixture", start_date="2024-01-01", end_date="2024-02-29")
+    (snapshot_dir / "outputs" / "bias_daily.parquet").unlink()
+
+    loaded = run_dashboard_pipeline(snapshot_dir=snapshot_dir)
+
+    assert loaded["snapshot_load_mode"] == "raw_fallback"
+    assert "Precomputed snapshot outputs" in loaded["snapshot_load_warning"]
+    assert not loaded["scores"].empty
 
 
 def test_streamlit_pipeline_requires_local_snapshot(tmp_path, monkeypatch) -> None:
@@ -65,6 +99,29 @@ def test_signal_date_options_are_sorted_unique() -> None:
     )
 
     assert _date_options(scores) == ["2026-06-08", "2026-06-12", "2026-06-15"]
+
+
+def test_nested_parquet_arrays_render_as_record_tables() -> None:
+    records = np.array(
+        [
+            {
+                "factor_name": "equity_index_futures_basis",
+                "group": "equity_index_futures",
+                "factor_score": 100.0,
+                "contribution": 15.0,
+                "raw_value": 1.0,
+                "zscore_value": 2.0,
+                "directional_score": 1.0,
+                "weight": 0.15,
+                "data_date": "2026-06-12",
+            }
+        ],
+        dtype=object,
+    )
+
+    assert _drivers_table(records).shape[0] == 1
+    assert _factor_contribution_table(records).shape[0] == 1
+    assert _risk_flags_table(np.array([], dtype=object)).empty
 
 
 def test_weight_diagnostics_tables_render_shadow_report() -> None:

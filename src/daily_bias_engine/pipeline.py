@@ -292,6 +292,33 @@ def load_snapshot_raw(snapshot_dir: Path | str) -> dict[str, pd.DataFrame]:
     return raw
 
 
+def load_snapshot_outputs(snapshot_dir: Path | str, data_mode: str = "snapshot") -> dict[str, Any]:
+    """Load precomputed snapshot outputs without recalculating factors."""
+
+    output_dir = Path(snapshot_dir) / "outputs"
+    paths = {
+        "factors": output_dir / "factor_daily.parquet",
+        "scores": output_dir / "bias_daily.parquet",
+        "labels": output_dir / "market_result_daily.parquet",
+        "metrics": output_dir / "metrics.json",
+        "report": output_dir / "report.json",
+    }
+    missing = [str(path) for path in paths.values() if not path.exists()]
+    if missing:
+        raise FileNotFoundError(f"Snapshot is missing precomputed outputs: {missing}")
+
+    return {
+        "factors": pd.read_parquet(paths["factors"]),
+        "scores": pd.read_parquet(paths["scores"]),
+        "labels": pd.read_parquet(paths["labels"]),
+        "metrics": json.loads(paths["metrics"].read_text(encoding="utf-8")),
+        "report": json.loads(paths["report"].read_text(encoding="utf-8")),
+        "data_mode": data_mode,
+        "raw": {},
+        "snapshot_load_mode": "outputs",
+    }
+
+
 def run_pipeline_from_snapshot(
     snapshot_dir: Path | str,
     config_dir: Path | str,
