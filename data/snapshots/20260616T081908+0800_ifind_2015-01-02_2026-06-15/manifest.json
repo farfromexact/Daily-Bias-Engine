@@ -1,0 +1,251 @@
+{
+  "created_at": "20260616T081908+0800",
+  "source": "ifind",
+  "start_date": "2015-01-02",
+  "end_date": "2026-06-15",
+  "raw_tables": [
+    "index_ohlcv",
+    "futures_ohlcv",
+    "open_interest",
+    "rates",
+    "etf_flow",
+    "overseas_ohlcv",
+    "ashare_ohlcv"
+  ],
+  "latest": {
+    "date": "2026-06-16",
+    "total_score": 34.55042218260441,
+    "raw_score_bias": "Risk-On",
+    "final_bias": "Risk-On",
+    "bias_label": "Risk-On",
+    "risk_override": "",
+    "override_reason": "",
+    "confidence": 34.55042218260441,
+    "sub_scores": {
+      "ashare_market_structure": 44.32222323670215,
+      "equity_index_futures": 45.72416054873263,
+      "etf_and_margin_flow": 100.0,
+      "overseas_market": 55.39982947712724,
+      "rates_and_bond_futures": -73.04458667754761
+    },
+    "trend_day_probability": 54.00273220043242,
+    "trend_direction_bias": "up",
+    "risk_flags_json": [],
+    "explanation": {
+      "date": "2026-06-16",
+      "raw_score_bias": "Risk-On",
+      "final_bias": "Risk-On",
+      "bias_label": "Risk-On",
+      "risk_override": "",
+      "override_reason": "",
+      "total_score": 34.55042218260441,
+      "confidence": 34.55042218260441,
+      "trend_day_probability": 54.00273220043242,
+      "trend_direction_bias": "up",
+      "sub_scores": {
+        "ashare_market_structure": 44.32222323670215,
+        "equity_index_futures": 45.72416054873263,
+        "etf_and_margin_flow": 100.0,
+        "overseas_market": 55.39982947712724,
+        "rates_and_bond_futures": -73.04458667754761
+      },
+      "risk_flags": [],
+      "positive_drivers": [
+        {
+          "factor_name": "equity_index_futures_basis",
+          "group": "equity_index_futures",
+          "factor_score": 92.54330189256673,
+          "contribution": 13.881495283885009,
+          "raw_value": -0.002394376153660338,
+          "zscore_value": 1.8508660378513346
+        },
+        {
+          "factor_name": "etf_flow_proxy",
+          "group": "etf_and_margin_flow",
+          "factor_score": 100.0,
+          "contribution": 10.0,
+          "raw_value": 0.765416066554744,
+          "zscore_value": 2.130682861181644
+        },
+        {
+          "factor_name": "margin_balance_momentum",
+          "group": "etf_and_margin_flow",
+          "factor_score": 100.0,
+          "contribution": 10.0,
+          "raw_value": 0.7680322729367159,
+          "zscore_value": 2.1306665795024746
+        }
+      ],
+      "negative_drivers": [
+        {
+          "factor_name": "yield_curve_slope",
+          "group": "rates_and_bond_futures",
+          "factor_score": -86.58304191251577,
+          "contribution": -8.658304191251577,
+          "raw_value": 0.4768999999999999,
+          "zscore_value": -1.7316608382503154
+        },
+        {
+          "factor_name": "rates_change_5d",
+          "group": "rates_and_bond_futures",
+          "factor_score": -59.506131442579466,
+          "contribution": -5.950613144257947,
+          "raw_value": 0.07800000000000007,
+          "zscore_value": 1.1901226288515894
+        },
+        {
+          "factor_name": "futures_open_interest_momentum",
+          "group": "equity_index_futures",
+          "factor_score": -24.504551467018516,
+          "contribution": -2.450455146701852,
+          "raw_value": -0.29637917349230747,
+          "zscore_value": -0.4900910293403703
+        }
+      ],
+      "factors": [
+        {
+          "factor_name": "ashare_breadth_proxy",
+          "group": "ashare_market_structure",
+          "data_source": "Market-data A-share daily open and close prices: SSE50, CSI300, STAR 50, ChiNext",
+          "raw_value": 0.5,
+          "zscore_value": 1.024295039463167,
+          "directional_score": 0.5121475197315835,
+          "factor_score": 51.21475197315834,
+          "weight": 0.09,
+          "contribution": 4.60932767758425,
+          "data_date": "2026-06-15",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "ashare_turnover_momentum",
+          "group": "ashare_market_structure",
+          "data_source": "Market-data A-share daily volume: SSE50, CSI300, STAR 50, ChiNext",
+          "raw_value": 0.05962050672215935,
+          "zscore_value": 0.6796686026403572,
+          "directional_score": 0.3398343013201786,
+          "factor_score": 33.98343013201786,
+          "weight": 0.06,
+          "contribution": 2.0390058079210713,
+          "data_date": "2026-06-15",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "equity_index_futures_basis",
+          "group": "equity_index_futures",
+          "data_source": "Market-data daily close: IF.CFE and 000300.SH",
+          "raw_value": -0.002394376153660338,
+          "zscore_value": 1.8508660378513346,
+          "directional_score": 0.9254330189256673,
+          "factor_score": 92.54330189256673,
+          "weight": 0.15,
+          "contribution": 13.881495283885009,
+          "data_date": "2026-06-15",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "etf_flow_proxy",
+          "group": "etf_and_margin_flow",
+          "data_source": "Market-data ETF daily amount: 510300.SH and 510500.SH",
+          "raw_value": 0.765416066554744,
+          "zscore_value": 2.130682861181644,
+          "directional_score": 1.0,
+          "factor_score": 100.0,
+          "weight": 0.1,
+          "contribution": 10.0,
+          "data_date": "2026-06-15",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "futures_open_interest_momentum",
+          "group": "equity_index_futures",
+          "data_source": "Market-data futures open interest: IF.CFE oi",
+          "raw_value": -0.29637917349230747,
+          "zscore_value": -0.4900910293403703,
+          "directional_score": -0.24504551467018515,
+          "factor_score": -24.504551467018516,
+          "weight": 0.1,
+          "contribution": -2.450455146701852,
+          "data_date": "2026-06-15",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "margin_balance_momentum",
+          "group": "etf_and_margin_flow",
+          "data_source": "Derived proxy from ETF amount until real margin balance is connected",
+          "raw_value": 0.7680322729367159,
+          "zscore_value": 2.1306665795024746,
+          "directional_score": 1.0,
+          "factor_score": 100.0,
+          "weight": 0.1,
+          "contribution": 10.0,
+          "data_date": "2026-06-15",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "overseas_market_momentum",
+          "group": "overseas_market",
+          "data_source": "Market-data overseas daily prices: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",
+          "raw_value": 0.02341649949879279,
+          "zscore_value": 1.545999910088553,
+          "directional_score": 0.7729999550442765,
+          "factor_score": 77.29999550442766,
+          "weight": 0.12,
+          "contribution": 9.275999460531319,
+          "data_date": "2026-06-15",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "overseas_volatility_pressure",
+          "group": "overseas_market",
+          "data_source": "Market-data overseas high-low range proxy: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",
+          "raw_value": 0.012453251860855948,
+          "zscore_value": -0.4509916087235327,
+          "directional_score": 0.22549580436176636,
+          "factor_score": 22.549580436176637,
+          "weight": 0.08,
+          "contribution": 1.8039664348941309,
+          "data_date": "2026-06-15",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "rates_change_5d",
+          "group": "rates_and_bond_futures",
+          "data_source": "iFinD funding rate series: DR007.IB 5-day change",
+          "raw_value": 0.07800000000000007,
+          "zscore_value": 1.1901226288515894,
+          "directional_score": -0.5950613144257947,
+          "factor_score": -59.506131442579466,
+          "weight": 0.1,
+          "contribution": -5.950613144257947,
+          "data_date": "2026-06-15",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "yield_curve_slope",
+          "group": "rates_and_bond_futures",
+          "data_source": "iFinD EDB spread: CGB30Y - CGB10Y using L001618299 and L001619604",
+          "raw_value": 0.4768999999999999,
+          "zscore_value": -1.7316608382503154,
+          "directional_score": -0.8658304191251577,
+          "factor_score": -86.58304191251577,
+          "weight": 0.1,
+          "contribution": -8.658304191251577,
+          "data_date": "2026-06-15",
+          "available_time": "16:30:00"
+        }
+      ],
+      "factor_schema": [
+        "date",
+        "signal_date",
+        "data_date",
+        "available_time",
+        "factor_name",
+        "data_source",
+        "raw_value",
+        "zscore_value",
+        "directional_score",
+        "asof_time"
+      ]
+    }
+  }
+}

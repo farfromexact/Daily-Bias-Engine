@@ -1,0 +1,8 @@
+{
+  "observations": 2773,
+  "bias_accuracy": 0.31878831590335377,
+  "trend_day_precision": 0.20754716981132076,
+  "trend_day_recall": 0.044989775051124746,
+  "big_loss_day_filter_rate": 0.954954954954955,
+  "false_risk_off_rate": 0.26538612308898474
+}
