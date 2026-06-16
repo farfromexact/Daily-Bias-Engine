@@ -35,6 +35,108 @@ SNAPSHOT_ROOT = PROJECT_ROOT / "data" / "snapshots"
 OPTION_DATA_ROOT = PROJECT_ROOT / "data" / "options_ifind"
 WEIGHT_REPORT_ROOT = PROJECT_ROOT / "reports" / "weight_optimizer"
 
+APP_USAGE_GUIDE = """
+### 这个系统是什么
+
+Daily Bias Engine 是一个盘前市场风向仪。它不直接给交易指令，而是把多个已经本地化的真实市场数据因子合成一个“今天适合偏进攻、等待、还是防守”的环境判断。
+
+### 每天应该先看什么
+
+1. 先看 Overview 顶部六个指标：信号日期、市场风向、总分、趋势日概率、趋势方向、置信度。
+2. 再看“每日环境卡片”：这是把数字翻译成人话后的当天摘要。
+3. 如果风向或总分看起来反直觉，去看“正向驱动 / 负向驱动”，它会告诉你今天主要是谁在拉高或压低总分。
+4. 如果最终风向被风险覆盖改写，优先看“风险硬标记”。硬风险会覆盖普通加权分数。
+5. 想知道系统为什么长期有效或失效，去 Backtest、Backtest Diagnostics、Factor Diagnostics。
+6. 想看期权链和 Gamma/Vol 结构，去 Options；想看权重优化研究，去 Weight Diagnostics。
+
+### 信号日期和数据日期的关系
+
+信号日期通常是“下一交易日开盘前要看的日期”。系统只使用这个信号日前已经可见的数据。比如 2026-06-16 的信号，通常使用 2026-06-15 收盘后已经落地的数据。表格里的 data_date 必须早于或等于可见数据日，不能偷看信号日之后的结果。
+
+### 分数怎么理解
+
+每个因子先算原始值，再转成 z-score，再映射为 directional_score，最后乘以权重贡献到总分。总分大致可理解为：
+
+- 大幅正数：环境偏 Risk-On，适合更积极地寻找多头/趋势机会。
+- 接近 0：环境不明确，系统建议等待或降低交易频率。
+- 大幅负数：环境偏 Risk-Off，优先防守和控制回撤。
+
+这不是收益预测的保证。它是环境过滤器，目的是减少在差环境里过度出手。
+
+### 为什么有些数据看起来是 proxy
+
+系统使用的底层数据是真实 iFinD 本地数据，但有些因子本身是 proxy。例如 ETF 成交额用于近似 ETF 资金流，A 股宽度用 50、300、科创、创业板指数涨跌来近似市场广度。proxy 的含义是“因子口径是替代变量”，不是假数据。
+"""
+
+HELP_TEXT = {
+    "signal_date_select": "选择要查看的信号日期。信号日期不是原始行情日期，而是系统给出盘前判断的日期；它通常使用前一交易日收盘后已经可见的数据。",
+    "metric_signal_date": "当前展示的盘前信号日期。比如 2026-06-16 表示这是给 2026-06-16 交易日使用的环境判断。",
+    "metric_market_bias": "最终市场风向。Risk-On 表示环境偏进攻；Neutral 表示等待或轻仓观察；Risk-Off 表示防守优先。最终风向可能被风险硬标记覆盖。",
+    "metric_total_score": "所有因子按配置权重加权后的总分。正数偏多，负数偏空，接近 0 表示信号不强。它不是收益率预测，而是环境分数。",
+    "metric_trend_probability": "系统估计当天出现趋势日的概率。趋势日指市场更可能单边扩展，而不是窄幅震荡。概率高不代表方向确定，还要结合趋势方向。",
+    "metric_trend_direction": "系统根据标签和因子结构估计的趋势方向：上行、下行或不明确。方向不明确时，即使趋势概率较高，也不应直接理解为单边看多或看空。",
+    "metric_confidence": "置信度来自总分强度和风险覆盖后的综合结果。置信度高表示系统当前判断更集中；置信度低表示因子分歧较大或总分接近中性。",
+    "metric_observations": "参与回测评估的历史样本天数。样本越多，统计结果越稳定；但市场结构变化也会让很久以前的样本参考价值下降。",
+    "metric_bias_accuracy": "方向命中率衡量 Risk-On 后市场上涨、Risk-Off 后市场下跌、Neutral 后市场相对平稳的比例。它不是单笔交易胜率。",
+    "metric_trend_precision": "趋势日 precision 表示系统认为趋势概率较高的日子里，有多少最终真的成为趋势日。它衡量信号发出后的准确性。",
+    "metric_trend_recall": "趋势日 recall 表示所有真实趋势日里，系统提前识别到了多少。它衡量系统漏掉趋势日的程度。",
+    "metric_big_loss_filter": "大亏日过滤率衡量系统在历史大亏日之前或当天给出防守提示的能力。它越高，说明风控过滤越有效。",
+    "metric_false_risk_off": "Risk-Off 误伤率衡量系统提示防守但市场并未走坏的比例。误伤率太高会错过机会，太低可能说明保护不足。",
+    "section_daily_card": "每日环境卡片把总分、趋势概率、风险覆盖和主要驱动翻译成一句操作语境。它适合做当天第一眼的环境摘要。",
+    "section_risk_override": "风险覆盖表示某些硬风险条件触发后，系统会把普通加权分数降级。它用于避免总分还可以、但底层风险已经恶化的情况。",
+    "section_positive_drivers": "正向驱动列出今天贡献最高的多头或 Risk-On 因子。贡献值等于因子分数乘以权重。",
+    "section_negative_drivers": "负向驱动列出今天拖累总分的因子。它帮助判断是利率、海外、期货结构、资金流还是 A 股结构在压制环境。",
+    "section_hard_risk": "风险硬标记是比普通加权更强的保护规则。如果某个因子跌破硬风险阈值，最终风向可能被强制转为 Risk-Off。",
+    "section_selected_factors": "这里展示当前信号日期实际用到的全部因子行，包括原始值、z-score、方向分、数据日期和可用时间。",
+    "section_all_factor_history": "全历史因子明细用于审计和排查。它不是每天必须看的表，主要用来确认某个因子在历史上怎么变化。",
+    "section_engine_summary": "每日信号总览列出历史每一天的原始风向、最终风向、风险覆盖、总分、置信度和趋势判断。",
+    "section_engine_explain": "引擎解释展示某一天的完整拆解：分项分、风险标记、驱动因子和全部因子贡献。",
+    "section_sub_scores": "分项分按模块聚合，例如海外、期货、ETF/融资、A 股结构、利率债券。它能告诉你今天的总分主要来自哪个模块。",
+    "section_factor_contribution": "全部因子贡献展示每个因子的方向分、权重和最终贡献。贡献加总后形成总分，再经过风险规则得到最终风向。",
+    "section_labels": "标签是收盘后才能知道的真实市场结果，用来评估盘前信号，不参与当天盘前判断。",
+    "section_backtest_summary": "回测摘要把历史信号和之后真实标签对齐，评估方向命中率、趋势日识别、亏损日过滤和误伤情况。",
+    "section_metrics_explain": "指标解释把回测里的专业指标翻译成普通语言。新用户应先看这一块再读详细表格。",
+    "section_daily_review": "逐日复盘逐天列出信号和结果，适合检查某段时间为什么命中或失效。",
+    "section_bias_diagnostics": "按最终风向分组统计不同风向后的平均收益、胜率、趋势日率和最大亏损，用于判断风向标签是否有区分度。",
+    "section_score_bucket": "总分分桶把历史总分分成区间，观察高分、低分和中性分数后的真实市场表现。",
+    "section_trend_bucket": "趋势概率分桶检查系统给出的趋势概率是否和真实趋势日发生率一致。",
+    "section_factor_diagnostics": "因子诊断从历史角度检查每个因子和后续收益、亏损日、趋势日的关系。它是研究工具，不是当天交易指令。",
+    "factor_sort_mode": "选择因子诊断表的排序口径：按亏损识别能力、方向收益关系，或寻找关系弱/反向的因子。",
+    "factor_quintile": "查看单个因子分成五档后，后续市场表现是否有单调性。它用于判断因子有没有稳定区分度。",
+    "section_logic": "Logic 页解释系统如何从真实数据生成因子、因子如何变成方向分、方向分如何合成总分。",
+    "section_options": "Options 页读取本地 iFinD 期权链，计算关键行权价、GEX、Vanna、Charm、隐波和偏度结构，用于辅助指数风险和波动率判断。",
+    "option_product": "选择期权品种：SSE50、CSI300、CSI1000。不同品种对应不同指数和期权链。",
+    "option_trade_date": "选择期权链交易日。期权数据必须等 iFinD 有完整当日链和参考收盘价后才能落地。",
+    "section_option_key_levels": "关键价位包括现货、put wall、call wall、最大 gamma 行权价等，用于观察期权仓位可能影响的价格区域。",
+    "section_option_exposures": "敞口展示 GEX、Vanna、Charm、Vega 等聚合结果。它们衡量做市商对价格、波动率和时间变化的敏感度。",
+    "section_option_vol": "波动率和偏度展示 30 日 IV、偏度、风险反转等，用于判断波动率风险溢价和尾部保护需求。",
+    "section_option_overlay": "Recommended Overlay 是期权模块给现货/指数 beta 和期权结构的建议倾向。它是风控辅助，不自动覆盖主引擎。",
+    "section_option_factor": "Option Factor Row 把期权链压缩成一行可进入模型的因子结果。",
+    "metric_option_regime": "期权模块根据 GEX、Vanna、Charm、隐波和偏度综合判断的期权市场状态。",
+    "metric_option_direction": "期权链对方向的倾向分。正值偏多，负值偏空；它只反映期权结构，不直接替代主市场风向。",
+    "metric_option_risk": "期权链给出的风险分。数值越高，表示期权结构中的尾部或对冲压力越需要关注。",
+    "metric_vol_carry": "隐含波动率相对 realized/期限结构的 carry 倾向。它用于判断卖波动或买保护是否更占优。",
+    "metric_tail_risk": "尾部风险分，主要来自偏度、风险反转和保护需求。高值表示市场对下行保护需求更强。",
+    "metric_beta_multiplier": "期权模块建议的 beta 调整倍数。小于 1 表示降低指数暴露，大于 1 表示期权结构允许更积极。",
+    "GEX By Strike": "按行权价汇总的 Gamma Exposure。它帮助观察哪些行权价附近可能存在较强的对冲压力或支撑/压制区域。",
+    "Spot Grid GEX": "假设现货价格移动到不同位置时重新估算 GEX，用于观察价格变化后期权仓位对市场的潜在影响。",
+    "IV Term Structure": "不同期限的隐含波动率结构。近端高于远端通常表示短期事件或压力溢价较强。",
+    "Skew Curve": "不同行权价或 delta 附近的隐含波动率偏斜。偏度越陡，通常说明尾部保护需求越强。",
+    "section_weight_diag": "Weight Diagnostics 是权重研究页。它只生成诊断和推荐，不会自动覆盖生产配置。",
+    "section_weight_recommendation": "最终推荐说明当前优化权重是否值得进入人工评审。系统不会自动采用任何推荐权重。",
+    "section_weight_comparison": "权重对比展示当前权重、优化权重和 blended 权重。blended 是 0.6 当前权重 + 0.4 优化权重，再经过约束投影。",
+    "section_constraint_check": "约束检查确认权重是否满足单因子、单模块、利率、ETF+融资、非负等限制。",
+    "section_fold_performance": "Fold performance 展示严格时间序列 walk-forward 每一折的训练区间、测试区间和样本外表现。",
+    "section_factor_stability": "Factor stability 衡量每个因子的 rolling IC、稳定性排名和权重波动率。稳定性差的因子不应轻易加权。",
+    "section_return_bucket": "Return bucket analysis 检查不同分数区间后的次日收益和方向命中情况。",
+    "section_risk_bucket": "Risk bucket analysis 检查风险分数高低对大亏损日过滤、误报和漏报的影响。",
+    "section_regime_diag": "Regime diagnostics 按趋势、波动率、压力和海外环境分组检查因子表现，防止平均数掩盖不同市场状态。",
+    "metric_current_weights": "当前生产配置正在使用的权重。Weight Diagnostics 不会自动修改它。",
+    "metric_optimized_weights": "优化器根据历史 walk-forward 诊断得到的研究权重，只用于评估，不代表已经采用。",
+    "metric_blended_weights": "候选 blended 权重：0.6 当前权重 + 0.4 优化权重，并经过约束投影。仍需人工批准。",
+    "metric_adoption_status": "采用状态。当前系统默认 shadow mode，表示只展示研究结果，不自动覆盖生产配置。",
+}
+
 
 def run_dashboard_pipeline(snapshot_dir: str | Path | None = None) -> dict[str, Any]:
     """Run the dashboard pipeline from a local market-data snapshot."""
@@ -103,10 +205,24 @@ def _cached_weight_diagnostics(report_path: str, report_mtime_ns: int) -> dict[s
     return json.loads(Path(report_path).read_text(encoding="utf-8"))
 
 
+def _help_text(key: str) -> str | None:
+    return HELP_TEXT.get(key)
+
+
+def _subheader(label: str, help_key: str | None = None) -> None:
+    st.subheader(label, help=_help_text(help_key or label))
+
+
+def _render_first_time_guide() -> None:
+    with st.expander("第一次使用说明：这个系统怎么看", expanded=False):
+        st.markdown(APP_USAGE_GUIDE)
+
+
 
 def main() -> None:
     st.set_page_config(page_title="市场风向机", layout="wide")
     st.title("市场风向机 / Daily Bias Engine")
+    _render_first_time_guide()
 
     snapshots = list_snapshots(SNAPSHOT_ROOT)
     snapshot_info = snapshots[0] if snapshots else None
@@ -133,6 +249,7 @@ def main() -> None:
         signal_dates,
         index=len(signal_dates) - 1,
         key=f"signal_date_{snapshot_key}_{latest_signal_date}",
+        help=_help_text("signal_date_select"),
     )
     selected_row = _selected_engine_row(scores, selected_date)
     selected_explanation = selected_row.get("explanation", {}) if selected_row else {}
@@ -158,19 +275,23 @@ def main() -> None:
 
     with overview:
         columns = st.columns(6)
-        columns[0].metric("信号日期", selected_date)
-        columns[1].metric("市场风向", _bias_label(selected_row.get("bias_label") if selected_row else None))
-        columns[2].metric("总分", _format_float(selected_row.get("total_score") if selected_row else None))
-        columns[3].metric("趋势日概率", f"{_format_float(selected_row.get('trend_day_probability') if selected_row else None)}%")
-        columns[4].metric("趋势方向", _trend_label(selected_row.get("trend_direction_bias") if selected_row else None))
-        columns[5].metric("置信度", f"{_format_float(selected_row.get('confidence') if selected_row else None)}%")
+        columns[0].metric("信号日期", selected_date, help=_help_text("metric_signal_date"))
+        columns[1].metric("市场风向", _bias_label(selected_row.get("bias_label") if selected_row else None), help=_help_text("metric_market_bias"))
+        columns[2].metric("总分", _format_float(selected_row.get("total_score") if selected_row else None), help=_help_text("metric_total_score"))
+        columns[3].metric(
+            "趋势日概率",
+            f"{_format_float(selected_row.get('trend_day_probability') if selected_row else None)}%",
+            help=_help_text("metric_trend_probability"),
+        )
+        columns[4].metric("趋势方向", _trend_label(selected_row.get("trend_direction_bias") if selected_row else None), help=_help_text("metric_trend_direction"))
+        columns[5].metric("置信度", f"{_format_float(selected_row.get('confidence') if selected_row else None)}%", help=_help_text("metric_confidence"))
 
-        st.subheader("每日环境卡片")
+        _subheader("每日环境卡片", "section_daily_card")
         st.write(_trading_posture(selected_row))
 
         override = _override_summary_table(selected_row)
         if not override.empty:
-            st.subheader("风险覆盖")
+            _subheader("风险覆盖", "section_risk_override")
             st.dataframe(override, width="stretch", hide_index=True)
 
         label_text = _label_summary_text(selected_label)
@@ -179,13 +300,13 @@ def main() -> None:
 
         driver_columns = st.columns(2)
         with driver_columns[0]:
-            st.subheader("正向驱动")
+            _subheader("正向驱动", "section_positive_drivers")
             st.dataframe(_drivers_table(selected_explanation.get("positive_drivers", [])), width="stretch", hide_index=True)
         with driver_columns[1]:
-            st.subheader("负向驱动")
+            _subheader("负向驱动", "section_negative_drivers")
             st.dataframe(_drivers_table(selected_explanation.get("negative_drivers", [])), width="stretch", hide_index=True)
 
-        st.subheader("风险硬标记")
+        _subheader("风险硬标记", "section_hard_risk")
         risk_flags = _record_list(selected_row.get("risk_flags_json", [])) if selected_row else []
         if risk_flags:
             st.dataframe(_risk_flags_table(risk_flags), width="stretch", hide_index=True)
@@ -193,27 +314,31 @@ def main() -> None:
             st.write("无")
 
     with factors_tab:
-        st.subheader(f"{selected_date} 信号使用的因子")
+        _subheader(f"{selected_date} 信号使用的因子", "section_selected_factors")
         st.dataframe(_factor_display_table(selected_factors), width="stretch", hide_index=True)
-        with st.expander("查看全部三年因子明细"):
+        with st.expander("查看全部历史因子明细"):
             st.dataframe(_factor_display_table(factors), width="stretch", hide_index=True)
 
     with engine_tab:
-        st.subheader("每日信号总览")
+        _subheader("每日信号总览", "section_engine_summary")
         st.dataframe(_engine_summary_table(scores), width="stretch", hide_index=True)
 
-        st.subheader(f"{selected_date} 引擎解释")
+        _subheader(f"{selected_date} 引擎解释", "section_engine_explain")
         detail_columns = st.columns(5)
-        detail_columns[0].metric("市场风向", _bias_label(selected_row.get("bias_label") if selected_row else None))
-        detail_columns[1].metric("总分", _format_float(selected_row.get("total_score") if selected_row else None))
-        detail_columns[2].metric("趋势日概率", f"{_format_float(selected_row.get('trend_day_probability') if selected_row else None)}%")
-        detail_columns[3].metric("趋势方向", _trend_label(selected_row.get("trend_direction_bias") if selected_row else None))
-        detail_columns[4].metric("置信度", f"{_format_float(selected_row.get('confidence') if selected_row else None)}%")
+        detail_columns[0].metric("市场风向", _bias_label(selected_row.get("bias_label") if selected_row else None), help=_help_text("metric_market_bias"))
+        detail_columns[1].metric("总分", _format_float(selected_row.get("total_score") if selected_row else None), help=_help_text("metric_total_score"))
+        detail_columns[2].metric(
+            "趋势日概率",
+            f"{_format_float(selected_row.get('trend_day_probability') if selected_row else None)}%",
+            help=_help_text("metric_trend_probability"),
+        )
+        detail_columns[3].metric("趋势方向", _trend_label(selected_row.get("trend_direction_bias") if selected_row else None), help=_help_text("metric_trend_direction"))
+        detail_columns[4].metric("置信度", f"{_format_float(selected_row.get('confidence') if selected_row else None)}%", help=_help_text("metric_confidence"))
 
-        st.subheader("分项分")
+        _subheader("分项分", "section_sub_scores")
         st.dataframe(_sub_scores_table(selected_row.get("sub_scores", {}) if selected_row else {}), width="stretch", hide_index=True)
 
-        st.subheader("风险硬标记")
+        _subheader("风险硬标记", "section_hard_risk")
         risk_flags = _record_list(selected_row.get("risk_flags_json", [])) if selected_row else []
         if risk_flags:
             st.dataframe(_risk_flags_table(risk_flags), width="stretch", hide_index=True)
@@ -222,13 +347,13 @@ def main() -> None:
 
         driver_columns = st.columns(2)
         with driver_columns[0]:
-            st.subheader("正向驱动")
+            _subheader("正向驱动", "section_positive_drivers")
             st.dataframe(_drivers_table(selected_explanation.get("positive_drivers", [])), width="stretch", hide_index=True)
         with driver_columns[1]:
-            st.subheader("负向驱动")
+            _subheader("负向驱动", "section_negative_drivers")
             st.dataframe(_drivers_table(selected_explanation.get("negative_drivers", [])), width="stretch", hide_index=True)
 
-        st.subheader("全部因子贡献")
+        _subheader("全部因子贡献", "section_factor_contribution")
         st.dataframe(_factor_contribution_table(selected_explanation.get("factors", [])), width="stretch", hide_index=True)
 
     with labels_tab:
@@ -240,39 +365,39 @@ def main() -> None:
             """
         )
         if selected_label:
-            st.subheader(f"{selected_date} 收盘后标签")
+            _subheader(f"{selected_date} 收盘后标签", "section_labels")
             st.dataframe(_label_display_table(pd.DataFrame([selected_label])), width="stretch", hide_index=True)
         else:
             st.info(f"{selected_date} 还没有对应的收盘后标签。最近一个信号日通常是下一交易日开盘前信号。")
-        st.subheader("全部标签")
+        _subheader("全部标签", "section_labels")
         st.dataframe(_label_display_table(labels), width="stretch", hide_index=True)
 
     with backtest_tab:
-        st.subheader("回测摘要")
+        _subheader("回测摘要", "section_backtest_summary")
         st.markdown(_backtest_plain_language(metrics))
         metric_columns = st.columns(6)
-        metric_columns[0].metric("样本天数", str(metrics.get("observations", 0)))
-        metric_columns[1].metric("方向命中率", _format_percent(metrics.get("bias_accuracy")))
-        metric_columns[2].metric("趋势日 precision", _format_percent(metrics.get("trend_day_precision")))
-        metric_columns[3].metric("趋势日 recall", _format_percent(metrics.get("trend_day_recall")))
-        metric_columns[4].metric("大亏日过滤率", _format_percent(metrics.get("big_loss_day_filter_rate")))
-        metric_columns[5].metric("Risk-Off 误伤率", _format_percent(metrics.get("false_risk_off_rate")))
+        metric_columns[0].metric("样本天数", str(metrics.get("observations", 0)), help=_help_text("metric_observations"))
+        metric_columns[1].metric("方向命中率", _format_percent(metrics.get("bias_accuracy")), help=_help_text("metric_bias_accuracy"))
+        metric_columns[2].metric("趋势日 precision", _format_percent(metrics.get("trend_day_precision")), help=_help_text("metric_trend_precision"))
+        metric_columns[3].metric("趋势日 recall", _format_percent(metrics.get("trend_day_recall")), help=_help_text("metric_trend_recall"))
+        metric_columns[4].metric("大亏日过滤率", _format_percent(metrics.get("big_loss_day_filter_rate")), help=_help_text("metric_big_loss_filter"))
+        metric_columns[5].metric("Risk-Off 误伤率", _format_percent(metrics.get("false_risk_off_rate")), help=_help_text("metric_false_risk_off"))
 
-        st.subheader("指标解释")
+        _subheader("指标解释", "section_metrics_explain")
         st.dataframe(_metrics_explanation_table(metrics), width="stretch", hide_index=True)
 
-        st.subheader("逐日复盘")
+        _subheader("逐日复盘", "section_daily_review")
         st.dataframe(_backtest_review_table(scores, labels), width="stretch", hide_index=True)
 
     with backtest_diagnostics_tab:
-        st.subheader("按最终风向分组")
+        _subheader("按最终风向分组", "section_bias_diagnostics")
         st.caption("这些统计只把开盘前信号与同一信号日收盘后的 realized label 对齐，不会回灌到因子生成。")
         st.dataframe(_bias_diagnostics_table(bias_return_diagnostics(scores, labels)), width="stretch", hide_index=True)
 
-        st.subheader("总分分桶")
+        _subheader("总分分桶", "section_score_bucket")
         st.dataframe(_score_bucket_table(score_bucket_diagnostics(scores, labels)), width="stretch", hide_index=True)
 
-        st.subheader("趋势概率分桶")
+        _subheader("趋势概率分桶", "section_trend_bucket")
         st.dataframe(
             _trend_probability_bucket_table(trend_probability_bucket_diagnostics(scores, labels)),
             width="stretch",
@@ -284,16 +409,17 @@ def main() -> None:
         factor_summary = diagnostics["summary"]
         quintiles = diagnostics["quintiles"]
 
-        st.subheader("因子诊断")
+        _subheader("因子诊断", "section_factor_diagnostics")
         sort_mode = st.selectbox(
             "排序方式",
             ["大亏识别最强", "方向收益关系最强", "关系最弱或反向"],
+            help=_help_text("factor_sort_mode"),
         )
         st.dataframe(_factor_diagnostics_table(factor_summary, sort_mode), width="stretch", hide_index=True)
 
         factor_options = sorted(quintiles["factor_name"].dropna().unique().tolist()) if not quintiles.empty else []
         if factor_options:
-            selected_factor = st.selectbox("查看五分位表现", factor_options)
+            selected_factor = st.selectbox("查看五分位表现", factor_options, help=_help_text("factor_quintile"))
             st.dataframe(_factor_quintile_table(quintiles, selected_factor), width="stretch", hide_index=True)
         else:
             st.info("当前没有足够数据生成因子五分位表现。")
@@ -305,7 +431,7 @@ def main() -> None:
         _render_options_tab(_available_option_snapshots())
 
     with logic_tab:
-        st.subheader("系统如何使用这些因子")
+        _subheader("系统如何使用这些因子", "section_logic")
         st.markdown(
             """
             当前版本是规则引擎，不是机器学习模型。每个因子先计算原始值，再做 20 日滚动 z-score，
@@ -342,7 +468,7 @@ def _available_option_snapshots(data_root: Path | str = OPTION_DATA_ROOT) -> dic
 
 
 def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
-    st.subheader("Local Option State")
+    _subheader("Local Option State", "section_options")
     st.caption(f"Source: iFinD local option chains at {OPTION_DATA_ROOT / 'normalized_chain'}")
     if not option_snapshots:
         st.info(
@@ -355,10 +481,10 @@ def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
     default_product = products.index("CSI300") if "CSI300" in products else 0
     controls = st.columns([1, 1, 2])
     with controls[0]:
-        product_group = st.selectbox("Option product", products, index=default_product)
+        product_group = st.selectbox("Option product", products, index=default_product, help=_help_text("option_product"))
     dates = option_snapshots.get(product_group, [])
     with controls[1]:
-        trade_date = st.selectbox("Trade date", dates, index=len(dates) - 1)
+        trade_date = st.selectbox("Trade date", dates, index=len(dates) - 1, help=_help_text("option_trade_date"))
 
     try:
         factors, payload, plots = _cached_option_state(product_group, trade_date, str(OPTION_DATA_ROOT))
@@ -368,24 +494,24 @@ def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
 
     overlay = payload.get("recommended_overlay", {})
     metric_columns = st.columns(6)
-    metric_columns[0].metric("Regime", str(payload.get("regime", "N/A")))
-    metric_columns[1].metric("Direction", _format_float(payload.get("option_direction_score")))
-    metric_columns[2].metric("Risk", _format_float(payload.get("option_risk_score")))
-    metric_columns[3].metric("Vol carry", _format_float(payload.get("vol_carry_score")))
-    metric_columns[4].metric("Tail risk", _format_float(payload.get("tail_risk_score")))
-    metric_columns[5].metric("Beta x", _format_float(overlay.get("beta_multiplier")))
+    metric_columns[0].metric("Regime", str(payload.get("regime", "N/A")), help=_help_text("metric_option_regime"))
+    metric_columns[1].metric("Direction", _format_float(payload.get("option_direction_score")), help=_help_text("metric_option_direction"))
+    metric_columns[2].metric("Risk", _format_float(payload.get("option_risk_score")), help=_help_text("metric_option_risk"))
+    metric_columns[3].metric("Vol carry", _format_float(payload.get("vol_carry_score")), help=_help_text("metric_vol_carry"))
+    metric_columns[4].metric("Tail risk", _format_float(payload.get("tail_risk_score")), help=_help_text("metric_tail_risk"))
+    metric_columns[5].metric("Beta x", _format_float(overlay.get("beta_multiplier")), help=_help_text("metric_beta_multiplier"))
 
     st.caption(str(payload.get("explanation", "")))
 
     summary_columns = st.columns(3)
     with summary_columns[0]:
-        st.subheader("Key Levels")
+        _subheader("Key Levels", "section_option_key_levels")
         st.dataframe(_option_payload_table(payload.get("key_levels", {})), width="stretch", hide_index=True)
     with summary_columns[1]:
-        st.subheader("Exposures")
+        _subheader("Exposures", "section_option_exposures")
         st.dataframe(_option_payload_table(payload.get("exposures", {})), width="stretch", hide_index=True)
     with summary_columns[2]:
-        st.subheader("Vol / Skew")
+        _subheader("Vol / Skew", "section_option_vol")
         vol_skew = {**payload.get("vol", {}), **payload.get("skew", {})}
         st.dataframe(_option_payload_table(vol_skew), width="stretch", hide_index=True)
 
@@ -395,10 +521,10 @@ def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
             "prefer_option_structure": overlay.get("prefer_option_structure"),
         }
     )
-    st.subheader("Recommended Overlay")
+    _subheader("Recommended Overlay", "section_option_overlay")
     st.dataframe(overlay_table, width="stretch", hide_index=True)
 
-    st.subheader("Option Factor Row")
+    _subheader("Option Factor Row", "section_option_factor")
     st.dataframe(_option_factor_table(factors), width="stretch", hide_index=True)
 
     chart_columns = st.columns(2)
@@ -415,7 +541,7 @@ def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
 
 
 def _render_weight_diagnostics_tab(report_root: Path | str = WEIGHT_REPORT_ROOT) -> None:
-    st.subheader("Weight Diagnostics")
+    _subheader("Weight Diagnostics", "section_weight_diag")
     st.caption("Shadow mode only. current_weights is production; optimized weights are diagnostics; constrained_blended_weights is a shadow candidate.")
     report_path = Path(report_root) / "latest_weight_diagnostics.json"
     if not report_path.exists():
@@ -438,36 +564,36 @@ def _render_weight_diagnostics_tab(report_root: Path | str = WEIGHT_REPORT_ROOT)
         f"OOS samples: {oos_summary.get('sample_count', 'N/A')}"
     )
     metric_columns = st.columns(4)
-    metric_columns[0].metric("current_weights", "production")
-    metric_columns[1].metric("optimized_weights", "diagnostic")
-    metric_columns[2].metric("constrained_blended", "shadow")
-    metric_columns[3].metric("adoption_status", str(report.get("adoption_status", "not adopted")))
+    metric_columns[0].metric("current_weights", "production", help=_help_text("metric_current_weights"))
+    metric_columns[1].metric("optimized_weights", "diagnostic", help=_help_text("metric_optimized_weights"))
+    metric_columns[2].metric("constrained_blended", "shadow", help=_help_text("metric_blended_weights"))
+    metric_columns[3].metric("adoption_status", str(report.get("adoption_status", "not adopted")), help=_help_text("metric_adoption_status"))
 
-    st.subheader("Final recommendation")
+    _subheader("Final recommendation", "section_weight_recommendation")
     st.write(recommendation.get("recommendation", "review_required"))
     st.write(recommendation.get("should_any_weight_be_adopted_into_production_now", "No."))
 
-    st.subheader("Weight comparison")
+    _subheader("Weight comparison", "section_weight_comparison")
     st.dataframe(_weight_comparison_table(report), width="stretch", hide_index=True)
 
-    st.subheader("Constraint check")
+    _subheader("Constraint check", "section_constraint_check")
     st.dataframe(_constraint_check_table(report.get("constraint_checks", {})), width="stretch", hide_index=True)
 
-    st.subheader("Fold performance")
+    _subheader("Fold performance", "section_fold_performance")
     st.dataframe(_weight_fold_table(report.get("walk_forward_folds", [])), width="stretch", hide_index=True)
 
-    st.subheader("Factor stability")
+    _subheader("Factor stability", "section_factor_stability")
     st.dataframe(_weight_factor_stability_table(report.get("factor_stability", [])), width="stretch", hide_index=True)
 
     bucket_columns = st.columns(2)
     with bucket_columns[0]:
-        st.subheader("Return bucket analysis")
+        _subheader("Return bucket analysis", "section_return_bucket")
         st.dataframe(_round_numeric(pd.DataFrame(report.get("bucket_analysis_return", []))), width="stretch", hide_index=True)
     with bucket_columns[1]:
-        st.subheader("Risk bucket analysis")
+        _subheader("Risk bucket analysis", "section_risk_bucket")
         st.dataframe(_round_numeric(pd.DataFrame(report.get("bucket_analysis_risk", []))), width="stretch", hide_index=True)
 
-    st.subheader("Regime diagnostics")
+    _subheader("Regime diagnostics", "section_regime_diag")
     st.dataframe(_weight_regime_table(report.get("regime_diagnostics", {})), width="stretch", hide_index=True)
 
 
@@ -523,7 +649,7 @@ def _render_option_chart(
     y_column: str,
     chart: str,
 ) -> None:
-    st.subheader(title)
+    _subheader(title)
     if frame is None or frame.empty or x_column not in frame.columns or y_column not in frame.columns:
         st.info("No local plot data available.")
         return
