@@ -6,6 +6,9 @@ __pycache__/
 .pytest-tmp*/
 .venv/
 venv/
+.env
+.env.*
+!.env.example
 data/raw/
 data/snapshots/
 data/processed/

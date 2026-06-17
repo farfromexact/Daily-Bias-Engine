@@ -16,9 +16,12 @@ if str(SRC_DIR) not in sys.path:
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from daily_bias_engine.env import load_local_env
 from daily_bias_engine.options.data import IFindOptionClient, OptionMarketDataStore, load_normalized_chain
 from daily_bias_engine.pipeline import default_history_range, latest_raw_data_date, list_snapshots, load_snapshot_raw
 from scripts.fetch_ifind_snapshot import update_ifind_snapshot
+
+load_local_env(PROJECT_ROOT)
 
 PRODUCT_GROUPS = ("SSE50", "CSI300", "CSI1000")
 

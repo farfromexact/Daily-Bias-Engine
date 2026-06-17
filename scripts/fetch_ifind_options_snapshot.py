@@ -13,7 +13,10 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from daily_bias_engine.env import load_local_env
 from daily_bias_engine.options.data import IFindOptionClient, OptionMarketDataStore, load_normalized_chain
+
+load_local_env(PROJECT_ROOT)
 
 
 def main() -> None:

@@ -19,6 +19,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from daily_bias_engine.data import IFindDataClient, RawDataCache
+from daily_bias_engine.env import load_local_env
 from daily_bias_engine.pipeline import (
     default_history_range,
     fetch_raw_inputs,
@@ -30,6 +31,8 @@ from daily_bias_engine.pipeline import (
     run_pipeline_from_raw,
     save_snapshot,
 )
+
+load_local_env(PROJECT_ROOT)
 
 
 def main() -> None:
