@@ -1,0 +1,384 @@
+{
+  "latest": {
+    "date": "2026-06-17",
+    "total_score": 19.8803413032065,
+    "raw_score_bias": "Neutral",
+    "final_bias": "Neutral",
+    "bias_label": "Neutral",
+    "risk_override": "",
+    "override_reason": "",
+    "confidence": 19.8803413032065,
+    "sub_scores": {
+      "ashare_market_structure": 12.03066034561112,
+      "equity_index_futures": 43.80678880552874,
+      "etf_and_margin_flow": 60.200004169460364,
+      "overseas_market": 0.7915781263735155,
+      "rates_and_bond_futures": -25.37135704592064
+    },
+    "trend_day_probability": 45.934187716763574,
+    "trend_direction_bias": "unclear",
+    "risk_flags_json": [],
+    "explanation": {
+      "date": "2026-06-17",
+      "raw_score_bias": "Neutral",
+      "final_bias": "Neutral",
+      "bias_label": "Neutral",
+      "risk_override": "",
+      "override_reason": "",
+      "total_score": 19.8803413032065,
+      "confidence": 19.8803413032065,
+      "trend_day_probability": 45.934187716763574,
+      "trend_direction_bias": "unclear",
+      "sub_scores": {
+        "ashare_market_structure": 12.03066034561112,
+        "equity_index_futures": 43.80678880552874,
+        "etf_and_margin_flow": 60.200004169460364,
+        "overseas_market": 0.7915781263735155,
+        "rates_and_bond_futures": -25.37135704592064
+      },
+      "risk_flags": [],
+      "positive_drivers": [
+        {
+          "factor_name": "equity_index_futures_basis",
+          "group": "equity_index_futures",
+          "factor_score": 88.06221223781453,
+          "contribution": 13.20933183567218,
+          "raw_value": -0.0018492568801296017,
+          "zscore_value": 1.7612442447562906
+        },
+        {
+          "factor_name": "etf_flow_proxy",
+          "group": "etf_and_margin_flow",
+          "factor_score": 60.20196411021559,
+          "contribution": 6.020196411021559,
+          "raw_value": 0.4317429370953414,
+          "zscore_value": 1.2040392822043118
+        },
+        {
+          "factor_name": "margin_balance_momentum",
+          "group": "etf_and_margin_flow",
+          "factor_score": 60.198044228705136,
+          "contribution": 6.019804422870514,
+          "raw_value": 0.43717031744824264,
+          "zscore_value": 1.2039608845741028
+        }
+      ],
+      "negative_drivers": [
+        {
+          "factor_name": "rates_change_5d",
+          "group": "rates_and_bond_futures",
+          "factor_score": -44.703579892583456,
+          "contribution": -4.470357989258345,
+          "raw_value": 0.07029999999999981,
+          "zscore_value": 0.8940715978516691
+        },
+        {
+          "factor_name": "overseas_market_momentum",
+          "group": "overseas_market",
+          "factor_score": -24.47599848740195,
+          "contribution": -2.9371198184882337,
+          "raw_value": -0.0023083321455711786,
+          "zscore_value": -0.48951996974803896
+        },
+        {
+          "factor_name": "futures_open_interest_momentum",
+          "group": "equity_index_futures",
+          "factor_score": -22.576346342899942,
+          "contribution": -2.2576346342899942,
+          "raw_value": -0.383267135517254,
+          "zscore_value": -0.45152692685799883
+        }
+      ],
+      "factors": [
+        {
+          "factor_name": "ashare_breadth_proxy",
+          "group": "ashare_market_structure",
+          "data_source": "Market-data A-share daily open and close prices: SSE50, CSI300, STAR 50, ChiNext",
+          "raw_value": 0.0,
+          "zscore_value": -0.19738550848793077,
+          "directional_score": -0.09869275424396538,
+          "factor_score": -9.869275424396537,
+          "weight": 0.09,
+          "contribution": -0.8882347881956884,
+          "data_date": "2026-06-16",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "ashare_turnover_momentum",
+          "group": "ashare_market_structure",
+          "data_source": "Market-data A-share daily volume: SSE50, CSI300, STAR 50, ChiNext",
+          "raw_value": 0.08840791611511034,
+          "zscore_value": 0.897611280012452,
+          "directional_score": 0.448805640006226,
+          "factor_score": 44.880564000622606,
+          "weight": 0.06,
+          "contribution": 2.6928338400373564,
+          "data_date": "2026-06-16",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "equity_index_futures_basis",
+          "group": "equity_index_futures",
+          "data_source": "Market-data daily close: IF.CFE and 000300.SH",
+          "raw_value": -0.0018492568801296017,
+          "zscore_value": 1.7612442447562906,
+          "directional_score": 0.8806221223781453,
+          "factor_score": 88.06221223781453,
+          "weight": 0.15,
+          "contribution": 13.20933183567218,
+          "data_date": "2026-06-16",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "etf_flow_proxy",
+          "group": "etf_and_margin_flow",
+          "data_source": "Market-data ETF daily amount: 510300.SH and 510500.SH",
+          "raw_value": 0.4317429370953414,
+          "zscore_value": 1.2040392822043118,
+          "directional_score": 0.6020196411021559,
+          "factor_score": 60.20196411021559,
+          "weight": 0.1,
+          "contribution": 6.020196411021559,
+          "data_date": "2026-06-16",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "futures_open_interest_momentum",
+          "group": "equity_index_futures",
+          "data_source": "Market-data futures open interest: IF.CFE oi",
+          "raw_value": -0.383267135517254,
+          "zscore_value": -0.45152692685799883,
+          "directional_score": -0.22576346342899942,
+          "factor_score": -22.576346342899942,
+          "weight": 0.1,
+          "contribution": -2.2576346342899942,
+          "data_date": "2026-06-16",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "margin_balance_momentum",
+          "group": "etf_and_margin_flow",
+          "data_source": "Derived proxy from ETF amount until real margin balance is connected",
+          "raw_value": 0.43717031744824264,
+          "zscore_value": 1.2039608845741028,
+          "directional_score": 0.6019804422870514,
+          "factor_score": 60.198044228705136,
+          "weight": 0.1,
+          "contribution": 6.019804422870514,
+          "data_date": "2026-06-16",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "overseas_market_momentum",
+          "group": "overseas_market",
+          "data_source": "Market-data overseas daily prices: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",
+          "raw_value": -0.0023083321455711786,
+          "zscore_value": -0.48951996974803896,
+          "directional_score": -0.24475998487401948,
+          "factor_score": -24.47599848740195,
+          "weight": 0.12,
+          "contribution": -2.9371198184882337,
+          "data_date": "2026-06-16",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "overseas_volatility_pressure",
+          "group": "overseas_market",
+          "data_source": "Market-data overseas high-low range proxy: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",
+          "raw_value": 0.00977242132543326,
+          "zscore_value": -0.7738588609407342,
+          "directional_score": 0.3869294304703671,
+          "factor_score": 38.69294304703671,
+          "weight": 0.08,
+          "contribution": 3.095435443762937,
+          "data_date": "2026-06-16",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "rates_change_5d",
+          "group": "rates_and_bond_futures",
+          "data_source": "iFinD funding rate series: DR007.IB 5-day change",
+          "raw_value": 0.07029999999999981,
+          "zscore_value": 0.8940715978516691,
+          "directional_score": -0.44703579892583456,
+          "factor_score": -44.703579892583456,
+          "weight": 0.1,
+          "contribution": -4.470357989258345,
+          "data_date": "2026-06-16",
+          "available_time": "16:30:00"
+        },
+        {
+          "factor_name": "yield_curve_slope",
+          "group": "rates_and_bond_futures",
+          "data_source": "iFinD EDB spread: CGB30Y - CGB10Y using L001618299 and L001619604",
+          "raw_value": 0.48509999999999986,
+          "zscore_value": -0.1207826839851566,
+          "directional_score": -0.0603913419925783,
+          "factor_score": -6.03913419925783,
+          "weight": 0.1,
+          "contribution": -0.603913419925783,
+          "data_date": "2026-06-16",
+          "available_time": "16:30:00"
+        }
+      ],
+      "factor_schema": [
+        "date",
+        "signal_date",
+        "data_date",
+        "available_time",
+        "factor_name",
+        "data_source",
+        "raw_value",
+        "zscore_value",
+        "directional_score",
+        "asof_time"
+      ]
+    }
+  },
+  "latest_factors": [
+    {
+      "date": "2026-06-17",
+      "signal_date": "2026-06-17 00:00:00",
+      "data_date": "2026-06-16",
+      "available_time": "16:30:00",
+      "factor_name": "equity_index_futures_basis",
+      "data_source": "Market-data daily close: IF.CFE and 000300.SH",
+      "raw_value": -0.0018492568801296017,
+      "zscore_value": 1.7612442447562906,
+      "directional_score": 0.8806221223781453,
+      "asof_time": "16:30:00"
+    },
+    {
+      "date": "2026-06-17",
+      "signal_date": "2026-06-17 00:00:00",
+      "data_date": "2026-06-16",
+      "available_time": "16:30:00",
+      "factor_name": "futures_open_interest_momentum",
+      "data_source": "Market-data futures open interest: IF.CFE oi",
+      "raw_value": -0.383267135517254,
+      "zscore_value": -0.45152692685799883,
+      "directional_score": -0.22576346342899942,
+      "asof_time": "16:30:00"
+    },
+    {
+      "date": "2026-06-17",
+      "signal_date": "2026-06-17 00:00:00",
+      "data_date": "2026-06-16",
+      "available_time": "16:30:00",
+      "factor_name": "rates_change_5d",
+      "data_source": "iFinD funding rate series: DR007.IB 5-day change",
+      "raw_value": 0.07029999999999981,
+      "zscore_value": 0.8940715978516691,
+      "directional_score": -0.44703579892583456,
+      "asof_time": "16:30:00"
+    },
+    {
+      "date": "2026-06-17",
+      "signal_date": "2026-06-17 00:00:00",
+      "data_date": "2026-06-16",
+      "available_time": "16:30:00",
+      "factor_name": "yield_curve_slope",
+      "data_source": "iFinD EDB spread: CGB30Y - CGB10Y using L001618299 and L001619604",
+      "raw_value": 0.48509999999999986,
+      "zscore_value": -0.1207826839851566,
+      "directional_score": -0.0603913419925783,
+      "asof_time": "16:30:00"
+    },
+    {
+      "date": "2026-06-17",
+      "signal_date": "2026-06-17 00:00:00",
+      "data_date": "2026-06-16",
+      "available_time": "16:30:00",
+      "factor_name": "etf_flow_proxy",
+      "data_source": "Market-data ETF daily amount: 510300.SH and 510500.SH",
+      "raw_value": 0.4317429370953414,
+      "zscore_value": 1.2040392822043118,
+      "directional_score": 0.6020196411021559,
+      "asof_time": "16:30:00"
+    },
+    {
+      "date": "2026-06-17",
+      "signal_date": "2026-06-17 00:00:00",
+      "data_date": "2026-06-16",
+      "available_time": "16:30:00",
+      "factor_name": "margin_balance_momentum",
+      "data_source": "Derived proxy from ETF amount until real margin balance is connected",
+      "raw_value": 0.43717031744824264,
+      "zscore_value": 1.2039608845741028,
+      "directional_score": 0.6019804422870514,
+      "asof_time": "16:30:00"
+    },
+    {
+      "date": "2026-06-17",
+      "signal_date": "2026-06-17 00:00:00",
+      "data_date": "2026-06-16",
+      "available_time": "16:30:00",
+      "factor_name": "overseas_market_momentum",
+      "data_source": "Market-data overseas daily prices: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",
+      "raw_value": -0.0023083321455711786,
+      "zscore_value": -0.48951996974803896,
+      "directional_score": -0.24475998487401948,
+      "asof_time": "16:30:00"
+    },
+    {
+      "date": "2026-06-17",
+      "signal_date": "2026-06-17 00:00:00",
+      "data_date": "2026-06-16",
+      "available_time": "16:30:00",
+      "factor_name": "overseas_volatility_pressure",
+      "data_source": "Market-data overseas high-low range proxy: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",
+      "raw_value": 0.00977242132543326,
+      "zscore_value": -0.7738588609407342,
+      "directional_score": 0.3869294304703671,
+      "asof_time": "16:30:00"
+    },
+    {
+      "date": "2026-06-17",
+      "signal_date": "2026-06-17 00:00:00",
+      "data_date": "2026-06-16",
+      "available_time": "16:30:00",
+      "factor_name": "ashare_breadth_proxy",
+      "data_source": "Market-data A-share daily open and close prices: SSE50, CSI300, STAR 50, ChiNext",
+      "raw_value": 0.0,
+      "zscore_value": -0.19738550848793077,
+      "directional_score": -0.09869275424396538,
+      "asof_time": "16:30:00"
+    },
+    {
+      "date": "2026-06-17",
+      "signal_date": "2026-06-17 00:00:00",
+      "data_date": "2026-06-16",
+      "available_time": "16:30:00",
+      "factor_name": "ashare_turnover_momentum",
+      "data_source": "Market-data A-share daily volume: SSE50, CSI300, STAR 50, ChiNext",
+      "raw_value": 0.08840791611511034,
+      "zscore_value": 0.897611280012452,
+      "directional_score": 0.448805640006226,
+      "asof_time": "16:30:00"
+    }
+  ],
+  "latest_label": {
+    "date": "2026-06-16",
+    "market_return": -0.0015291985878318481,
+    "market_composite_return": -0.0015291985878318481,
+    "intraday_range": 0.008644224572287787,
+    "open_close_direction": "down",
+    "body_ratio": 0.252160093225067,
+    "close_location": 0.4303819954334966,
+    "trend_day_flag": false,
+    "up_trend_day_flag": false,
+    "down_trend_day_flag": false,
+    "big_loss_day_flag": false,
+    "choppy_day_flag": false,
+    "composite_open_to_close_return": -0.0021749875916223793,
+    "CSI300_return": -0.0015291985878318481
+  },
+  "metrics": {
+    "observations": 722,
+    "bias_accuracy": 0.33518005540166207,
+    "trend_day_precision": 0.1935483870967742,
+    "trend_day_recall": 0.05,
+    "big_loss_day_filter_rate": 0.9428571428571428,
+    "false_risk_off_rate": 0.2590975254730713
+  }
+}
