@@ -10,13 +10,10 @@ venv/
 .env.*
 !.env.example
 data/raw/
-data/snapshots/
 data/processed/
 data/features/
 data/signals/
 data/results/
-data/options/normalized_chain/
-data/options_ifind/
 data/options_ifind_probe/
 data/snapshots_probe/
 .streamlit_logs/
