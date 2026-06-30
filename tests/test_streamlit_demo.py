@@ -10,6 +10,9 @@ from apps.streamlit_app import (
     _drivers_table,
     _engine_summary_table,
     _factor_contribution_table,
+    _liquidity_chart_data,
+    _liquidity_summary,
+    _load_liquidity_data,
     _risk_flags_table,
     _weight_comparison_table,
     _weight_fold_table,
@@ -151,3 +154,42 @@ def test_weight_diagnostics_tables_render_shadow_report() -> None:
     assert "constrained_blended_weights" in _weight_comparison_table(report).columns
     assert _constraint_check_table(report["constraint_checks"]).loc[0, "pass"] in {True, False}
     assert _weight_fold_table(report["walk_forward_folds"]).loc[0, "sample_count"] == 5
+
+
+def test_liquidity_loader_reads_committed_local_csvs(tmp_path) -> None:
+    availability_path = tmp_path / "liquidity_data_availability.csv"
+    panel_path = tmp_path / "liquidity_raw_panel.csv"
+    availability_path.write_text(
+        "indicator_name,actual_source_found,ticker_or_code,success / fail,latest_value\n"
+        "ON RRP,FRED/public_csv,RRPONTSYD,success,3.5\n"
+        "Dollar liquidity proxy / Fed Net Liquidity proxy,derived_proxy,Fed Total Assets - TGA - ON RRP,success,1000\n",
+        encoding="utf-8",
+    )
+    panel_path.write_text(
+        "date,ON RRP,Dollar liquidity proxy / Fed Net Liquidity proxy,DXY\n"
+        "2026-06-28,5,990,101\n"
+        "2026-06-29,3.5,1000,102\n",
+        encoding="utf-8",
+    )
+
+    availability, panel = _load_liquidity_data(availability_path, panel_path)
+    summary = _liquidity_summary(availability, panel)
+
+    assert summary["success_count"] == "2"
+    assert summary["latest_date"] == "2026-06-29"
+    assert summary["net_liquidity"] == "1,000.000"
+
+
+def test_liquidity_chart_data_can_normalize_local_panel() -> None:
+    panel = pd.DataFrame(
+        {
+            "date": ["2026-06-28", "2026-06-29"],
+            "ON RRP": [5.0, 10.0],
+            "DXY": [100.0, 101.0],
+        }
+    )
+
+    chart_data = _liquidity_chart_data(panel, ["ON RRP", "DXY"], normalize=True)
+
+    assert chart_data.loc[pd.Timestamp("2026-06-28"), "ON RRP"] == 100.0
+    assert chart_data.loc[pd.Timestamp("2026-06-29"), "ON RRP"] == 200.0

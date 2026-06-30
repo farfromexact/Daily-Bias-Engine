@@ -1,0 +1,9 @@
+﻿chart_name,path,success / fail,error_message
+Fed Net Liquidity vs SPX Nasdaq,/Users/mini/Documents/Codex/Daily Bias Engine/data/liquidity_charts/fed_net_liquidity_vs_spx_nasdaq.svg,success,
+ON RRP,/Users/mini/Documents/Codex/Daily Bias Engine/data/liquidity_charts/on_rrp.svg,success,
+TGA,/Users/mini/Documents/Codex/Daily Bias Engine/data/liquidity_charts/tga.svg,success,
+SOFR,/Users/mini/Documents/Codex/Daily Bias Engine/data/liquidity_charts/sofr.svg,success,
+3M Treasury,/Users/mini/Documents/Codex/Daily Bias Engine/data/liquidity_charts/3m_treasury.svg,success,
+DXY,/Users/mini/Documents/Codex/Daily Bias Engine/data/liquidity_charts/dxy.svg,success,
+HY Spread,/Users/mini/Documents/Codex/Daily Bias Engine/data/liquidity_charts/hy_spread.svg,success,
+MOVE,/Users/mini/Documents/Codex/Daily Bias Engine/data/liquidity_charts/move.svg,success,

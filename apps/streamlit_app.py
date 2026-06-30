@@ -34,6 +34,9 @@ CONFIG_DIR = PROJECT_ROOT / "configs"
 SNAPSHOT_ROOT = PROJECT_ROOT / "data" / "snapshots"
 OPTION_DATA_ROOT = PROJECT_ROOT / "data" / "options_ifind"
 WEIGHT_REPORT_ROOT = PROJECT_ROOT / "reports" / "weight_optimizer"
+LIQUIDITY_AVAILABILITY_PATH = PROJECT_ROOT / "data" / "liquidity_data_availability.csv"
+LIQUIDITY_RAW_PANEL_PATH = PROJECT_ROOT / "data" / "liquidity_raw_panel.csv"
+LIQUIDITY_CHART_ROOT = PROJECT_ROOT / "data" / "liquidity_charts"
 
 APP_USAGE_GUIDE = """
 ### 这个系统是什么
@@ -135,6 +138,9 @@ HELP_TEXT = {
     "metric_optimized_weights": "优化器根据历史 walk-forward 诊断得到的研究权重，只用于评估，不代表已经采用。",
     "metric_blended_weights": "候选 blended 权重：0.6 当前权重 + 0.4 优化权重，并经过约束投影。仍需人工批准。",
     "metric_adoption_status": "采用状态。当前系统默认 shadow mode，表示只展示研究结果，不自动覆盖生产配置。",
+    "section_liquidity": "Liquidity 页只读取本地 CSV/SVG 文件，不会在 Streamlit 运行时访问 iFinD、Wind、FRED、Yahoo 或其他在线源。",
+    "section_liquidity_availability": "数据可得性表记录每个美元流动性指标最终由哪个本地拉数结果支持，以及失败原因。",
+    "section_liquidity_panel": "Raw panel 是本地拉取后的宽表。后续部署时把这个 CSV 一起提交到 Git，Streamlit 只负责展示。",
 }
 
 
@@ -205,6 +211,17 @@ def _cached_weight_diagnostics(report_path: str, report_mtime_ns: int) -> dict[s
     return json.loads(Path(report_path).read_text(encoding="utf-8"))
 
 
+@st.cache_data(show_spinner="Loading local liquidity data...")
+def _cached_liquidity_data(
+    availability_path: str,
+    availability_mtime_ns: int,
+    raw_panel_path: str,
+    raw_panel_mtime_ns: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    _ = (availability_mtime_ns, raw_panel_mtime_ns)
+    return _load_liquidity_data(availability_path, raw_panel_path)
+
+
 def _help_text(key: str) -> str | None:
     return HELP_TEXT.get(key)
 
@@ -258,7 +275,19 @@ def main() -> None:
 
     st.caption(_data_status_text(result, snapshot_info, scores))
 
-    overview, factors_tab, engine_tab, labels_tab, backtest_tab, backtest_diagnostics_tab, factor_diagnostics_tab, weight_diag_tab, options_tab, logic_tab = st.tabs(
+    (
+        overview,
+        factors_tab,
+        engine_tab,
+        labels_tab,
+        backtest_tab,
+        backtest_diagnostics_tab,
+        factor_diagnostics_tab,
+        weight_diag_tab,
+        options_tab,
+        liquidity_tab,
+        logic_tab,
+    ) = st.tabs(
         [
             "Overview",
             "Factors",
@@ -269,6 +298,7 @@ def main() -> None:
             "Factor Diagnostics",
             "Weight Diagnostics",
             "Options",
+            "Liquidity",
             "Logic",
         ]
     )
@@ -429,6 +459,9 @@ def main() -> None:
 
     with options_tab:
         _render_options_tab(_available_option_snapshots())
+
+    with liquidity_tab:
+        _render_liquidity_tab()
 
     with logic_tab:
         _subheader("系统如何使用这些因子", "section_logic")
@@ -595,6 +628,208 @@ def _render_weight_diagnostics_tab(report_root: Path | str = WEIGHT_REPORT_ROOT)
 
     _subheader("Regime diagnostics", "section_regime_diag")
     st.dataframe(_weight_regime_table(report.get("regime_diagnostics", {})), width="stretch", hide_index=True)
+
+
+def _render_liquidity_tab(
+    availability_path: Path | str = LIQUIDITY_AVAILABILITY_PATH,
+    raw_panel_path: Path | str = LIQUIDITY_RAW_PANEL_PATH,
+    chart_root: Path | str = LIQUIDITY_CHART_ROOT,
+) -> None:
+    _subheader("Global Dollar Liquidity", "section_liquidity")
+    availability_file = Path(availability_path)
+    raw_panel_file = Path(raw_panel_path)
+    chart_dir = Path(chart_root)
+    st.caption(
+        "Local-only display. Refresh outside Streamlit with "
+        "`python scripts/test_liquidity_data_availability.py --start 1990-01-01`, "
+        "then commit the generated CSV/SVG files."
+    )
+
+    missing = [str(path) for path in (availability_file, raw_panel_file) if not path.exists()]
+    if missing:
+        st.info(f"Local liquidity files are missing: {missing}")
+        return
+
+    try:
+        availability, panel = _cached_liquidity_data(
+            str(availability_file),
+            availability_file.stat().st_mtime_ns,
+            str(raw_panel_file),
+            raw_panel_file.stat().st_mtime_ns,
+        )
+    except Exception as exc:
+        st.error(f"Local liquidity data failed to load: {exc}")
+        return
+
+    summary = _liquidity_summary(availability, panel)
+    metric_columns = st.columns(6)
+    metric_columns[0].metric("Indicators", f"{summary['success_count']}/{summary['indicator_count']}")
+    metric_columns[1].metric("Latest Date", summary["latest_date"])
+    metric_columns[2].metric("Net Liquidity", summary["net_liquidity"])
+    metric_columns[3].metric("ON RRP", summary["on_rrp"])
+    metric_columns[4].metric("TGA", summary["tga"])
+    metric_columns[5].metric("DXY", summary["dxy"])
+
+    source_table = _liquidity_source_table(availability)
+    if not source_table.empty:
+        st.caption("Actual sources found in the committed local dataset:")
+        st.dataframe(source_table, width="stretch", hide_index=True)
+
+    local_charts, interactive, availability_tab, raw_panel_tab = st.tabs(["Local Charts", "Interactive Panel", "Availability", "Raw Panel"])
+
+    with local_charts:
+        _render_liquidity_svg_grid(chart_dir)
+
+    with interactive:
+        available_columns = [column for column in panel.columns if column != "date"]
+        default_columns = [column for column in _default_liquidity_chart_columns() if column in available_columns]
+        selected_columns = st.multiselect("Indicators", available_columns, default=default_columns)
+        normalize = st.checkbox("Index selected series to 100", value=len(selected_columns) > 1)
+        chart_data = _liquidity_chart_data(panel, selected_columns, normalize=normalize)
+        if chart_data.empty:
+            st.info("No local liquidity panel data available for the selected indicators.")
+        else:
+            st.line_chart(chart_data)
+            with st.expander("Selected local chart data"):
+                st.dataframe(_round_numeric(chart_data.reset_index()), width="stretch", hide_index=True)
+
+    with availability_tab:
+        _subheader("Data Availability", "section_liquidity_availability")
+        st.dataframe(_liquidity_availability_table(availability), width="stretch", hide_index=True)
+
+    with raw_panel_tab:
+        _subheader("Raw Liquidity Panel", "section_liquidity_panel")
+        st.dataframe(_round_numeric(panel.sort_values("date", ascending=False)), width="stretch", hide_index=True)
+
+
+def _load_liquidity_data(availability_path: Path | str, raw_panel_path: Path | str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    availability_file = Path(availability_path)
+    raw_panel_file = Path(raw_panel_path)
+    if not availability_file.exists():
+        raise FileNotFoundError(f"Missing liquidity availability CSV: {availability_file}")
+    if not raw_panel_file.exists():
+        raise FileNotFoundError(f"Missing liquidity raw panel CSV: {raw_panel_file}")
+
+    availability = pd.read_csv(availability_file, encoding="utf-8-sig")
+    panel = pd.read_csv(raw_panel_file, encoding="utf-8-sig")
+    if "date" not in panel.columns:
+        raise ValueError("Liquidity raw panel must contain a date column.")
+    panel["date"] = pd.to_datetime(panel["date"], errors="coerce")
+    panel = panel.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
+    return availability, panel
+
+
+def _liquidity_summary(availability: pd.DataFrame, panel: pd.DataFrame) -> dict[str, str]:
+    success_col = "success / fail"
+    success_count = int(availability[success_col].eq("success").sum()) if success_col in availability.columns else 0
+    indicator_count = int(len(availability))
+    latest_date = "N/A"
+    if not panel.empty and "date" in panel.columns:
+        dates = pd.to_datetime(panel["date"], errors="coerce").dropna()
+        if not dates.empty:
+            latest_date = dates.max().strftime("%Y-%m-%d")
+    return {
+        "indicator_count": str(indicator_count),
+        "success_count": str(success_count),
+        "latest_date": latest_date,
+        "net_liquidity": _latest_liquidity_value(panel, "Dollar liquidity proxy / Fed Net Liquidity proxy"),
+        "on_rrp": _latest_liquidity_value(panel, "ON RRP"),
+        "tga": _latest_liquidity_value(panel, "TGA"),
+        "dxy": _latest_liquidity_value(panel, "DXY"),
+    }
+
+
+def _liquidity_source_table(availability: pd.DataFrame) -> pd.DataFrame:
+    if "actual_source_found" not in availability.columns:
+        return pd.DataFrame()
+    table = (
+        availability["actual_source_found"]
+        .fillna("")
+        .replace("", pd.NA)
+        .dropna()
+        .value_counts()
+        .rename_axis("actual_source_found")
+        .reset_index(name="indicator_count")
+    )
+    return table
+
+
+def _liquidity_availability_table(availability: pd.DataFrame) -> pd.DataFrame:
+    table = availability.copy()
+    numeric_columns = [column for column in ("latest_value",) if column in table.columns]
+    for column in numeric_columns:
+        table[column] = pd.to_numeric(table[column], errors="coerce")
+    return _round_numeric(table)
+
+
+def _latest_liquidity_value(panel: pd.DataFrame, column: str) -> str:
+    if panel.empty or column not in panel.columns:
+        return "N/A"
+    values = pd.to_numeric(panel[column], errors="coerce").dropna()
+    if values.empty:
+        return "N/A"
+    return f"{float(values.iloc[-1]):,.3f}"
+
+
+def _default_liquidity_chart_columns() -> list[str]:
+    return [
+        "Dollar liquidity proxy / Fed Net Liquidity proxy",
+        "ON RRP",
+        "TGA",
+        "SOFR",
+        "3M Treasury Yield",
+        "DXY",
+        "HY OAS / High Yield Spread",
+        "MOVE Index",
+    ]
+
+
+def _liquidity_chart_data(panel: pd.DataFrame, columns: list[str], *, normalize: bool) -> pd.DataFrame:
+    if panel.empty or not columns:
+        return pd.DataFrame()
+    existing = [column for column in columns if column in panel.columns]
+    if not existing:
+        return pd.DataFrame()
+    chart_data = panel[["date", *existing]].copy()
+    chart_data["date"] = pd.to_datetime(chart_data["date"], errors="coerce")
+    chart_data = chart_data.dropna(subset=["date"]).set_index("date").sort_index()
+    chart_data = chart_data.apply(pd.to_numeric, errors="coerce")
+    chart_data = chart_data.dropna(how="all")
+    if chart_data.empty or not normalize:
+        return chart_data
+
+    indexed = pd.DataFrame(index=chart_data.index)
+    for column in chart_data.columns:
+        series = chart_data[column].dropna()
+        if series.empty:
+            continue
+        first = float(series.iloc[0])
+        if first == 0:
+            continue
+        indexed[column] = chart_data[column] / first * 100.0
+    return indexed.dropna(how="all")
+
+
+def _render_liquidity_svg_grid(chart_dir: Path) -> None:
+    chart_specs = [
+        ("Fed Net Liquidity vs SPX / Nasdaq", chart_dir / "fed_net_liquidity_vs_spx_nasdaq.svg"),
+        ("ON RRP", chart_dir / "on_rrp.svg"),
+        ("TGA", chart_dir / "tga.svg"),
+        ("SOFR", chart_dir / "sofr.svg"),
+        ("3M Treasury", chart_dir / "3m_treasury.svg"),
+        ("DXY", chart_dir / "dxy.svg"),
+        ("HY Spread", chart_dir / "hy_spread.svg"),
+        ("MOVE", chart_dir / "move.svg"),
+    ]
+    for index in range(0, len(chart_specs), 2):
+        columns = st.columns(2)
+        for column, (title, path) in zip(columns, chart_specs[index : index + 2]):
+            with column:
+                _subheader(title)
+                if path.exists():
+                    st.markdown(path.read_text(encoding="utf-8"), unsafe_allow_html=True)
+                else:
+                    st.info(f"Local chart not found: {path}")
 
 
 def _option_payload_table(values: dict[str, Any]) -> pd.DataFrame:

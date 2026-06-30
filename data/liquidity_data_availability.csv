@@ -1,0 +1,17 @@
+﻿indicator_name,preferred_source,actual_source_found,ticker_or_code,frequency,start_date_available,latest_date,latest_value,success / fail,error_message,comments
+Fed Balance Sheet / Total Assets,iFinD,FRED/public_csv,WALCL,weekly,2002-12-18,2026-06-24,6735645.0,success,,Quantity of liquidity. FRED WALCL is in millions of USD.
+ON RRP,iFinD,FRED/public_csv,RRPONTSYD,daily,2003-02-07,2026-06-29,3.546,success,,"Quantity of liquidity. Falling ON RRP usually releases liquidity, so modeling direction should be inverted."
+TGA,iFinD,FRED/public_csv,WTREGEN,weekly,2002-12-18,2026-06-24,918696.0,success,,"Treasury General Account. Rising TGA usually drains liquidity, so modeling direction should be inverted."
+SOFR,iFinD,FRED/public_csv,SOFR,daily,2018-04-03,2026-06-29,3.62,success,,"Funding price, not funding quantity."
+Effective Fed Funds Rate,iFinD,FRED/public_csv,DFF,daily,1990-01-01,2026-06-26,3.63,success,,"Funding price, not funding quantity."
+3M Treasury Yield,iFinD,FRED/public_csv,DGS3MO,daily,1990-01-02,2026-06-26,3.83,success,,Funding price / front-end rate.
+2Y Treasury Yield,iFinD,FRED/public_csv,DGS2,daily,1990-01-02,2026-06-26,4.07,success,,Treasury yield curve point.
+10Y Treasury Yield,iFinD,FRED/public_csv,DGS10,daily,1990-01-02,2026-06-26,4.38,success,,Treasury yield curve point.
+30Y Treasury Yield,iFinD,FRED/public_csv,DGS30,daily,1990-01-02,2026-06-26,4.87,success,,Treasury yield curve point.
+10Y TIPS Yield / real yield,iFinD,FRED/public_csv,DFII10,daily,2003-01-02,2026-06-26,2.18,success,,Real yield. Useful for liquidity/financial-conditions dashboarding.
+DXY,iFinD,Yahoo/chart_api,DX-Y.NYB,daily,1990-01-01,2026-06-30,101.375,success,,Exact DXY preferred. FRED broad trade-weighted USD is not treated as DXY success.
+VIX,iFinD,FRED/public_csv,VIXCLS,daily,1990-01-02,2026-06-26,18.41,success,,Risk appetite / financial conditions.
+MOVE Index,iFinD,Yahoo/chart_api,^MOVE,daily,2002-11-12,2026-06-26,66.79000091552734,success,,Rates volatility / financial conditions. Public availability may be weaker than VIX.
+HY OAS / High Yield Spread,iFinD,FRED/public_csv,BAMLH0A0HYM2,daily,2023-06-30,2026-06-26,2.83,success,,Credit spread / risk appetite.
+Investment Grade OAS / BBB OAS,iFinD,FRED/public_csv,BAMLC0A4CBBB,daily,2023-06-30,2026-06-26,0.96,success,,Credit spread / risk appetite. BBB OAS is tried before broad IG OAS.
+Dollar liquidity proxy / Fed Net Liquidity proxy,derived_proxy,derived_proxy,Fed Total Assets - TGA - ON RRP,daily,2003-02-07,2026-06-29,5816945.454,success,,Derived proxy: Fed Total Assets - TGA - ON RRP. Components should be aligned and forward-filled.
