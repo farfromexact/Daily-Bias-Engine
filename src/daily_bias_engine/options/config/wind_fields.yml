@@ -1,10 +1,9 @@
 option_contract_fields:
-  option_code: "wind_code"
-  option_type: "call_or_put"
-  strike: "exercise_price"
-  expiry_date: "expire_date"
-  multiplier_or_contract_unit: "contract_unit"
-  adjusted_contract_flag: "is_adjusted"
+  option_code: "option_code"
+  option_type: "call_put"
+  strike: "strike_price"
+  expiry_date: "last_tradedate"
+  multiplier_or_contract_unit: "multiplier"
 
 option_eod_fields:
   open: "open"
@@ -14,9 +13,7 @@ option_eod_fields:
   settle: "settle"
   volume: "volume"
   open_interest: "oi"
-  bid: "bid1"
-  ask: "ask1"
-  implied_vol: "imp_vol"
+  implied_vol: "us_impliedvol"
 
 underlying_eod_fields:
   open: "open"
@@ -28,4 +25,4 @@ underlying_eod_fields:
 
 rates:
   risk_free_rate: "SHIBOR1W.IR"
-  dividend_yield: null
+  dividend_yield: null  # Model assumption: 0 when constructing the normalized chain.

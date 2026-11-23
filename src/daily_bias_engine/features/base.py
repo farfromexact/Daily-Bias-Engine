@@ -21,8 +21,8 @@ FACTOR_COLUMNS = [
 FACTOR_DATA_SOURCES = {
     "equity_index_futures_basis": "Market-data daily close: IF.CFE and 000300.SH",
     "futures_open_interest_momentum": "Market-data futures open interest: IF.CFE oi",
-    "rates_change_5d": "iFinD funding rate series: DR007.IB 5-day change",
-    "yield_curve_slope": "iFinD EDB spread: CGB30Y - CGB10Y using L001618299 and L001619604",
+    "rates_change_5d": "Wind funding rate series: DR007.IB 5-day change",
+    "yield_curve_slope": "Wind EDB spread: CGB30Y - CGB10Y using S0059752 and S0059749",
     "etf_flow_proxy": "Market-data ETF daily amount: 510300.SH and 510500.SH",
     "margin_balance_momentum": "Derived proxy from ETF amount until real margin balance is connected",
     "overseas_market_momentum": "Market-data overseas daily prices: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",

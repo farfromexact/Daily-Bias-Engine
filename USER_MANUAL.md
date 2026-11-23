@@ -34,7 +34,7 @@ Daily Bias Engine 是一个盘前市场环境过滤器，不是自动交易系�
 
 ### 期权状态模块
 
-期权模块读取 `data/options_ifind/` 下的期权链，支持：
+期权模块读取 `data/options_wind/` 下的期权链，支持：
 
 - `SSE50`
 - `CSI300`
@@ -44,15 +44,15 @@ Daily Bias Engine 是一个盘前市场环境过滤器，不是自动交易系�
 
 ### Streamlit 看板
 
-Streamlit 是主要使用入口。它不会实时请求 iFinD，而是读取已经落地的本地快照。
+Streamlit 是主要使用入口。它不会实时请求 Wind，而是读取已经落地的本地快照。
 
 ### 脚本层
 
 脚本负责把外部 API 数据本地化：
 
-- `scripts/update_ifind_data.py`：日常总入口，增量更新主市场和期权数据。
-- `scripts/fetch_ifind_snapshot.py`：更新主市场快照。
-- `scripts/fetch_ifind_options_snapshot.py`：更新 iFinD 期权链。
+- `scripts/update_wind_data.py`：日常总入口，增量更新主市场和期权数据。
+- `scripts/fetch_wind_snapshot.py`：更新主市场快照。
+- `scripts/fetch_wind_options_snapshot.py`：更新 Wind 期权链。
 
 ## 3. 安装和环境准备
 
@@ -62,9 +62,11 @@ Streamlit 是主要使用入口。它不会实时请求 iFinD，而是读取已�
 cd "C:\Users\macon\Documents\Daily Bias Engine"
 ```
 
-安装项目和测试依赖：
+首次创建项目虚拟环境并安装依赖。已有环境时直接激活。
 
 ```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[test]"
 ```
 
@@ -74,38 +76,29 @@ python -m pip install -e ".[test]"
 pytest
 ```
 
-iFinD 取数需要本机安装并可导入 `iFinDPy`，同时设置账号密码环境变量。不要把账号密码写入仓库文件。
-
-PowerShell 示例：
-
-```powershell
-$env:IFIND_USERNAME="你的账号"
-$env:IFIND_PASSWORD="你的密码"
-```
-
-这些变量只对当前 PowerShell 会话生效。
+使用官方 Wind API 登录本机账号。在项目虚拟环境中运行 `python scripts/configure_wind.py`，脚本会查找已安装的 SDK 并写入该环境的 `WindPy.pth`。macOS 默认位置为 `/Applications/Wind API.app/Contents/python`。Windows 支持通过 `--wind-python-dir` 指定包含 `WindPy.py` 的目录。首次取数时在官方 Wind API 登录窗口完成认证。
 
 ## 4. 推荐日常使用流程
 
 每天更新数据并看结果的常规顺序：
 
 1. 打开 PowerShell，进入项目目录。
-2. 设置 iFinD 环境变量。
+2. 确认 Wind API 已登录，与 Trading Desk 错开 WindPy 采集时段。
 3. 运行日常增量更新脚本。
 4. 启动或刷新 Streamlit。
 
 日常总入口：
 
 ```powershell
-python scripts\update_ifind_data.py
+python scripts\update_wind_data.py
 ```
 
-它会先增量更新主市场快照，再增量更新 `SSE50`、`CSI300`、`CSI1000` 期权链。没有新数据时会直接退出，不生成空快照。
+它会先增量更新主市场快照，再增量更新 `SSE50`、`CSI300`、`CSI1000` 期权链。期权首次取最近一个交易日，之后从各产品最后一个已保存日期继续。可用 `--options-start YYYY-MM-DD` 补历史。
 
-查看将要更新的区间但不调用 iFinD：
+查看将要更新的区间但不调用 Wind：
 
 ```powershell
-python scripts\update_ifind_data.py --dry-run
+python scripts\update_wind_data.py --dry-run
 ```
 
 ### 4.1 更新主市场快照
@@ -113,36 +106,36 @@ python scripts\update_ifind_data.py --dry-run
 默认是增量优先：
 
 ```powershell
-python scripts\fetch_ifind_snapshot.py
+python scripts\fetch_wind_snapshot.py
 ```
 
-如果本地已经有 iFinD 快照，它只请求旧快照最新原始日期之后的新数据，然后与本地三年历史合并并重新计算完整 snapshot。如果本地没有 iFinD 快照，它会自动初始化最近三年。
+增量更新从各序列最后有效日期中最早需要补数的日期开始，重新计算完整快照。首次更新或早期 Wind 快照缺少当前品种时，重新获取最近三年的历史。
 
 指定截止日期：
 
 ```powershell
-python scripts\fetch_ifind_snapshot.py --end 2026-06-12 --years 3
+python scripts\fetch_wind_snapshot.py --end 2026-06-12 --years 3
 ```
 
 强制重拉三年全量：
 
 ```powershell
-python scripts\fetch_ifind_snapshot.py --full-refresh --years 3
+python scripts\fetch_wind_snapshot.py --full-refresh --years 3
 ```
 
 指定完整区间：
 
 ```powershell
-python scripts\fetch_ifind_snapshot.py --start 2023-06-12 --end 2026-06-12
+python scripts\fetch_wind_snapshot.py --start 2023-06-12 --end 2026-06-12
 ```
 
 脚本会写入：
 
 ```text
-data/snapshots/<生成时间>_ifind_<开始日期>_<结束日期>/
+data/snapshots/<生成时间>_wind_<开始日期>_<结束日期>/
 ```
 
-Streamlit 会自动读取 `data/snapshots/` 中生成时间最新的快照。
+Streamlit 会自动读取 `data/snapshots/` 中生成时间最新的 Wind 快照。
 
 注意：即使 API 只增量取一天，模型计算仍使用合并后的历史数据，因为 5 日变化、20 日 z-score、60/120 日标签和诊断都需要历史窗口。
 
@@ -151,31 +144,31 @@ Streamlit 会自动读取 `data/snapshots/` 中生成时间最新的快照。
 更新某一天全部产品：
 
 ```powershell
-python scripts\fetch_ifind_options_snapshot.py --date 2026-06-12
+python scripts\fetch_wind_options_snapshot.py --date 2026-06-12
 ```
 
 更新某一天单个产品：
 
 ```powershell
-python scripts\fetch_ifind_options_snapshot.py --date 2026-06-12 --product CSI300
+python scripts\fetch_wind_options_snapshot.py --date 2026-06-12 --product CSI300
 ```
 
 更新一段区间全部产品：
 
 ```powershell
-python scripts\fetch_ifind_options_snapshot.py --start-date 2026-01-01 --end-date 2026-06-12
+python scripts\fetch_wind_options_snapshot.py --start-date 2026-01-01 --end-date 2026-06-12
 ```
 
 更新一段区间的多个指定产品：
 
 ```powershell
-python scripts\fetch_ifind_options_snapshot.py --start-date 2026-01-01 --end-date 2026-06-12 --product SSE50 --product CSI300
+python scripts\fetch_wind_options_snapshot.py --start-date 2026-01-01 --end-date 2026-06-12 --product SSE50 --product CSI300
 ```
 
 默认输出目录是：
 
 ```text
-data/options_ifind/
+data/options_wind/
 ```
 
 如果本地已经有同一天同产品的数据，脚本默认跳过。需要强制重拉时加：
@@ -206,21 +199,21 @@ python -m streamlit run apps\streamlit_app.py --server.port 8506
 
 ## 6. 本地更新和部署数据
 
-当前仓库不再使用 GitHub Actions 自动调用 iFinD 取数。iFinD 数据更新由你在本地机器上手动执行，本地机器需要已经安装 iFinD 终端/API，并且当前 Python 能导入 `iFinDPy`。
+在安装官方 Wind API 并已配置 WindPy 的本地机器上运行更新。
 
 本地日常更新入口：
 
 ```powershell
-python scripts\update_ifind_data.py
+python scripts\update_wind_data.py
 ```
 
-这个脚本会增量更新主市场 snapshot 和 `SSE50`、`CSI300`、`CSI1000` 期权链，并只保留最近 2 个 iFinD 主市场快照。Streamlit Cloud 不直接调用 iFinD；它只读取 GitHub 仓库中已经提交的最新 parquet。
+这个脚本会增量更新主市场 snapshot 和 `SSE50`、`CSI300`、`CSI1000` 期权链，并只保留最近 2 个 Wind 主市场快照。Streamlit Cloud 不直接调用 Wind；它只读取 GitHub 仓库中已经提交的最新 parquet。
 
 如果希望外网 Streamlit Cloud 也显示最新数据，本地提数后提交并 push：
 
 ```powershell
-git add -f data\snapshots data\options_ifind
-git commit -m "chore(data): update local iFinD snapshots"
+git add -- data/snapshots data/options_wind
+git commit -m "chore(data): update local Wind snapshots"
 git push
 ```
 
@@ -230,32 +223,32 @@ git push
 http://localhost:8506/
 ```
 
-如果页面仍显示旧数据，先刷新页面；如果仍旧，重启 Streamlit 进程。Streamlit 读取的是本地最新快照目录，不会在页面里直接调用 iFinD。
+如果页面仍显示旧数据，先刷新页面；如果仍旧，重启 Streamlit 进程。Streamlit 读取的是本地最新快照目录，不会在页面里直接调用 Wind。
 
 ## 7. 如何确认数据已经更新
 
 查看最新主快照：
 
 ```powershell
-Get-ChildItem data\snapshots | Sort-Object Name -Descending | Select-Object -First 3 Name
+Get-ChildItem data\snapshots -Directory -Filter "*_wind_*" | Sort-Object Name -Descending | Select-Object -First 3 Name
 ```
 
 用 Python 读取最新快照摘要：
 
 ```powershell
-python -c "from pathlib import Path; import json; from daily_bias_engine.pipeline import list_snapshots; s=list_snapshots(Path('data/snapshots'))[0]; m=json.loads((s.path/'manifest.json').read_text(encoding='utf-8')); print(s.path); print(m['source'], m['start_date'], m['end_date']); print(m['latest'])"
+python -c "from pathlib import Path; import json; from daily_bias_engine.pipeline import list_snapshots; s=list_snapshots(Path('data/snapshots'), source='wind')[0]; m=json.loads((s.path/'manifest.json').read_text(encoding='utf-8')); print(s.path); print(m['source'], m['start_date'], m['end_date']); print(m['latest'])"
 ```
 
 查看期权数据日期：
 
 ```powershell
-Get-ChildItem data\options_ifind\normalized_chain\product_group=CSI300 | Sort-Object Name -Descending | Select-Object -First 5 Name
+Get-ChildItem data\options_wind\normalized_chain\product_group=CSI300 | Sort-Object Name -Descending | Select-Object -First 5 Name
 ```
 
 生成单日 CSI300 期权状态 JSON：
 
 ```powershell
-python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12 --product CSI300 --data-root data\options_ifind
+python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12 --product CSI300 --data-root data\options_wind
 ```
 
 ## 8. 权重诊断报告
@@ -319,7 +312,7 @@ python -m daily_bias_engine.weight_optimizer --snapshot-root data\snapshots --co
 
 ### Options
 
-展示本地 iFinD 期权链计算出的状态，包括：
+展示本地 Wind 期权链计算出的状态，包括：
 
 - regime：期权状态分类。
 - key levels：spot、put wall、call wall、max gamma strike、zero gamma。
@@ -363,7 +356,7 @@ score <= -30 => Risk-Off
 | `equity_index_futures_basis` | 股指期货结构 | IF 连续合约相对沪深300现货的基差 | 基差改善偏 Risk-On |
 | `futures_open_interest_momentum` | 股指期货结构 | IF 持仓量 5 日变化 | 持仓回升暂偏 Risk-On |
 | `rates_change_5d` | 利率 | `DR007.IB` 5 日变化 | 利率上行偏 Risk-Off |
-| `yield_curve_slope` | 利率 | iFinD EDB 30Y 国债收益率 - 10Y 国债收益率 | 曲线变陡暂偏 Risk-On |
+| `yield_curve_slope` | 利率 | Wind EDB 30Y 国债收益率 - 10Y 国债收益率 | 曲线变陡暂偏 Risk-On |
 | `etf_flow_proxy` | ETF/资金流 | 510300、510500 成交额 5 日变化 | 成交额回升偏 Risk-On |
 | `margin_balance_momentum` | ETF/资金流 | 当前由 ETF 成交额派生的两融 proxy | proxy 回升偏 Risk-On |
 | `overseas_market_momentum` | 海外隔夜 | 美国、日本、韩国指数的加权单日涨跌 | 海外上涨偏 Risk-On |
@@ -376,7 +369,7 @@ score <= -30 => Risk-Off
 - `proxy` 不是假数据，而是指因子口径是替代变量。
 - 海外隔夜当前使用 `SPX.GI`、`N225.GI`、`KS11.GI`，权重分别为美国 80%、日本 10%、韩国 10%；如果某个市场当日缺数据，则按当日可用指数的权重重新归一。
 - A 股市场宽度当前使用 `000016.SH`、`000300.SH`、`000688.SH`、`399006.SZ`，对应上证50、沪深300、科创50、创业板指。
-- 期限利差使用 `L001618299`（中债国债到期收益率:30年）减 `L001619604`（中债国债到期收益率:10年）；取不到真实 EDB 时不会伪造。
+- 期限利差使用 `S0059752`（中债国债到期收益率:30年）减 `S0059749`（中债国债到期收益率:10年）；取不到真实 EDB 时不会伪造。
 - `margin_balance_momentum` 当前还不是两融真实余额，是用 ETF 成交额派生的 proxy。
 
 ## 12. 期权状态怎么理解
@@ -384,7 +377,7 @@ score <= -30 => Risk-Off
 期权状态命令：
 
 ```powershell
-python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12 --product CSI300 --data-root data\options_ifind
+python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12 --product CSI300 --data-root data\options_wind
 ```
 
 核心字段：
@@ -418,12 +411,12 @@ python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12
 
 | 目录 | 用途 | 是否应提交 Git |
 | --- | --- | --- |
-| `data/snapshots/` | 主市场快照，Streamlit 主模块读取 | 否 |
-| `data/raw/ifind/` | iFinD 原始请求缓存 | 否 |
-| `data/options_ifind/` | iFinD 期权链，Streamlit 期权模块读取 | 否 |
+| `data/snapshots/` | Wind 市场快照，Streamlit 主模块读取 | 按部署需要 |
+| `data/raw/wind/` | Wind 原始请求缓存 | 否 |
+| `data/options_wind/` | Wind 期权链，Streamlit 期权模块读取 | 按部署需要 |
 | `.streamlit_logs/` | 本地 Streamlit 日志 | 否 |
 
-这些数据目录通常在 `.gitignore` 里忽略。仓库提交代码和配置，不提交本地行情数据和账号密码。
+原始请求缓存和本机配置由 Git 忽略。部署所用的 Wind 快照按第 6 节更新。
 
 ## 14. 常见问题
 
@@ -432,7 +425,7 @@ python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-12
 先运行：
 
 ```powershell
-python scripts\fetch_ifind_snapshot.py
+python scripts\fetch_wind_snapshot.py
 ```
 
 然后重启或刷新 Streamlit。
@@ -442,35 +435,21 @@ python scripts\fetch_ifind_snapshot.py
 先运行：
 
 ```powershell
-python scripts\fetch_ifind_options_snapshot.py --date 2026-06-12
+python scripts\fetch_wind_options_snapshot.py --date 2026-06-12
 ```
 
 如果看的是历史日期，把 `--date` 改成对应交易日。
 
-### 提示 iFinD credentials are required
+### WindPy 导入或登录失败
 
-当前 PowerShell 没有设置账号密码环境变量。重新设置：
-
-```powershell
-$env:IFIND_USERNAME="你的账号"
-$env:IFIND_PASSWORD="你的密码"
-```
-
-### iFinD 登录或导入失败
-
-检查：
-
-- 本机是否安装 iFinD 终端/API。
-- 当前 Python 环境是否能 `import iFinDPy`。
-- 账号密码是否有效。
-- iFinD 授权是否过期。
+用当前虚拟环境运行 `python scripts/configure_wind.py --check` 检查 SDK 路径。首次连接时请完成官方 Wind API 登录，并检查账号的 Python API、历史行情与 EDB 权限。权限或额度错误会保留 Wind 原始错误码。
 
 ### 期权拉数中间失败
 
 区间拉取时，脚本会记录失败日期和产品。可先不加 `--fail-fast`，让可成功的日期先落地。修复后再对失败日期单独重拉：
 
 ```powershell
-python scripts\fetch_ifind_options_snapshot.py --date 2026-06-12 --product CSI300 --overwrite
+python scripts\fetch_wind_options_snapshot.py --date 2026-06-12 --product CSI300 --overwrite
 ```
 
 ### Streamlit 端口被占用
@@ -496,7 +475,7 @@ pytest
 只校验主要文件语法：
 
 ```powershell
-python -m py_compile apps\streamlit_app.py scripts\fetch_ifind_snapshot.py scripts\fetch_ifind_options_snapshot.py scripts\update_ifind_data.py
+python -m py_compile apps\streamlit_app.py scripts\fetch_wind_snapshot.py scripts\fetch_wind_options_snapshot.py scripts\update_wind_data.py
 ```
 
 查看 Git 状态：
@@ -508,19 +487,19 @@ git status --short
 提交前确认不要把以下内容加入 Git：
 
 - 真实账号密码。
-- `data/raw/ifind/` 原始请求审计缓存。
+- `data/raw/wind/` 原始请求审计缓存。
 - 本地日志文件。
 
-`data/snapshots/` 和 `data/options_ifind/` 中的公开 parquet 可以按部署需要由你本地手动提交。
+`data/snapshots/` 和 `data/options_wind/` 中的部署用 Parquet 可以按部署需要由你本地手动提交。
 
 ## 16. 当前版本限制
 
-当前系统已经可以从 iFinD 本地化主市场数据和期权链，并在 Streamlit 中展示真实数据结果。但它仍是研究系统，不是生产交易系统。
+当前系统已经可以从 Wind 本地化主市场数据和期权链，并在 Streamlit 中展示真实数据结果。但它仍是研究系统，不是生产交易系统。
 
 主要限制：
 
 - 主因子仍是 v1 代表性口径，部分字段是 proxy。
-- `yield_curve_slope` 依赖 iFinD EDB 的 30Y/10Y 国债收益率；取不到时不会伪造。
+- `yield_curve_slope` 依赖 Wind EDB 的 30Y/10Y 国债收益率；取不到时不会伪造。
 - ETF 流入流出还没有接入真实份额或申赎数据。
 - 两融余额仍是 proxy。
 - A 股市场宽度暂用指数样本替代全市场上涨家数。

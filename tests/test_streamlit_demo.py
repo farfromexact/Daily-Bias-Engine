@@ -19,12 +19,12 @@ from apps.streamlit_app import (
     run_dashboard_pipeline,
 )
 from daily_bias_engine.pipeline import run_pipeline_from_raw, save_snapshot
-from tests.fixtures import raw_ifind_like_inputs
+from tests.fixtures import raw_market_inputs
 
 
 def test_streamlit_pipeline_reads_local_snapshot_without_launching_ui(tmp_path) -> None:
-    result = run_pipeline_from_raw(raw_ifind_like_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="snapshot")
-    snapshot_dir = save_snapshot(result, tmp_path, source="ifind_fixture", start_date="2024-01-01", end_date="2024-02-29")
+    result = run_pipeline_from_raw(raw_market_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="snapshot")
+    snapshot_dir = save_snapshot(result, tmp_path, source="wind_fixture", start_date="2024-01-01", end_date="2024-02-29")
     loaded = run_dashboard_pipeline(snapshot_dir=snapshot_dir)
 
     assert not loaded["factors"].empty
@@ -37,8 +37,8 @@ def test_streamlit_pipeline_reads_local_snapshot_without_launching_ui(tmp_path) 
 def test_streamlit_pipeline_prefers_precomputed_outputs(tmp_path, monkeypatch) -> None:
     import apps.streamlit_app as streamlit_app
 
-    result = run_pipeline_from_raw(raw_ifind_like_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="snapshot")
-    snapshot_dir = save_snapshot(result, tmp_path, source="ifind_fixture", start_date="2024-01-01", end_date="2024-02-29")
+    result = run_pipeline_from_raw(raw_market_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="snapshot")
+    snapshot_dir = save_snapshot(result, tmp_path, source="wind_fixture", start_date="2024-01-01", end_date="2024-02-29")
 
     def fail_recalculation(*_args, **_kwargs):
         raise AssertionError("Streamlit should not recalculate when snapshot outputs exist.")
@@ -53,8 +53,8 @@ def test_streamlit_pipeline_prefers_precomputed_outputs(tmp_path, monkeypatch) -
 
 
 def test_streamlit_pipeline_falls_back_to_raw_when_outputs_are_missing(tmp_path) -> None:
-    result = run_pipeline_from_raw(raw_ifind_like_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="snapshot")
-    snapshot_dir = save_snapshot(result, tmp_path, source="ifind_fixture", start_date="2024-01-01", end_date="2024-02-29")
+    result = run_pipeline_from_raw(raw_market_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="snapshot")
+    snapshot_dir = save_snapshot(result, tmp_path, source="wind_fixture", start_date="2024-01-01", end_date="2024-02-29")
     (snapshot_dir / "outputs" / "bias_daily.parquet").unlink()
 
     loaded = run_dashboard_pipeline(snapshot_dir=snapshot_dir)
@@ -193,3 +193,18 @@ def test_liquidity_chart_data_can_normalize_local_panel() -> None:
 
     assert chart_data.loc[pd.Timestamp("2026-06-28"), "ON RRP"] == 100.0
     assert chart_data.loc[pd.Timestamp("2026-06-29"), "ON RRP"] == 200.0
+
+
+def test_dashboard_and_weight_optimizer_skip_newer_archived_provider(tmp_path, monkeypatch):
+    import json
+    from apps import streamlit_app
+    from daily_bias_engine.weight_optimizer import _resolve_snapshot_dir
+
+    raw = raw_market_inputs("2024-01-01", "2024-02-29")
+    path = save_snapshot(run_pipeline_from_raw(raw, CONFIG_DIR), tmp_path, "wind", "2024-01-01", "2024-02-29")
+    archived = tmp_path / "archive"
+    archived.mkdir()
+    (archived / "manifest.json").write_text(json.dumps({"source": "ifind", "created_at": "9999"}))
+    monkeypatch.setattr(streamlit_app, "SNAPSHOT_ROOT", tmp_path)
+    assert run_dashboard_pipeline()["snapshot_load_mode"] == "outputs"
+    assert _resolve_snapshot_dir(None, str(tmp_path)) == path

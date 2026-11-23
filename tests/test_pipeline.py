@@ -11,8 +11,8 @@ from daily_bias_engine.pipeline import (
     run_pipeline_from_raw,
     save_snapshot,
 )
-from scripts import fetch_ifind_snapshot
-from tests.fixtures import raw_ifind_like_inputs
+from scripts import fetch_wind_snapshot
+from tests.fixtures import raw_market_inputs
 
 
 def test_default_history_range_uses_latest_weekday_for_three_year_snapshot() -> None:
@@ -86,8 +86,8 @@ def test_merge_raw_inputs_dedupes_with_new_values_and_trims_history() -> None:
 
 
 def test_load_snapshot_outputs_reads_precomputed_tables(tmp_path) -> None:
-    result = run_pipeline_from_raw(raw_ifind_like_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="ifind")
-    snapshot_dir = save_snapshot(result, tmp_path, source="ifind", start_date="2024-01-01", end_date="2024-02-29")
+    result = run_pipeline_from_raw(raw_market_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="wind")
+    snapshot_dir = save_snapshot(result, tmp_path, source="wind", start_date="2024-01-01", end_date="2024-02-29")
 
     loaded = load_snapshot_outputs(snapshot_dir)
 
@@ -100,27 +100,27 @@ def test_load_snapshot_outputs_reads_precomputed_tables(tmp_path) -> None:
     assert loaded["report"]["latest"]["date"] == result["report"]["latest"]["date"]
 
 
-def test_ifind_snapshot_update_skips_when_base_already_covers_target(tmp_path) -> None:
-    result = run_pipeline_from_raw(raw_ifind_like_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="ifind")
-    save_snapshot(result, tmp_path, source="ifind", start_date="2024-01-01", end_date="2024-02-29")
+def test_wind_snapshot_update_skips_when_base_already_covers_target(tmp_path) -> None:
+    result = run_pipeline_from_raw(raw_market_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="wind")
+    save_snapshot(result, tmp_path, source="wind", start_date="2024-01-01", end_date="2024-02-29")
 
-    snapshot_dir = fetch_ifind_snapshot.update_ifind_snapshot(snapshot_root=tmp_path, end="2024-02-29")
+    snapshot_dir = fetch_wind_snapshot.update_wind_snapshot(snapshot_root=tmp_path, end="2024-02-29")
 
     assert snapshot_dir is None
 
 
-def test_ifind_snapshot_update_fetches_only_new_dates(monkeypatch, tmp_path) -> None:
-    result = run_pipeline_from_raw(raw_ifind_like_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="ifind")
-    save_snapshot(result, tmp_path, source="ifind", start_date="2024-01-01", end_date="2024-02-29")
+def test_wind_snapshot_update_fetches_only_new_dates(monkeypatch, tmp_path) -> None:
+    result = run_pipeline_from_raw(raw_market_inputs("2024-01-01", "2024-02-29"), config_dir=CONFIG_DIR, data_mode="wind")
+    save_snapshot(result, tmp_path, source="wind", start_date="2024-01-01", end_date="2024-02-29")
     calls: list[tuple[str, str]] = []
 
     def fake_fetch_raw_inputs(_client: object, start_date: str, end_date: str) -> dict[str, pd.DataFrame]:
         calls.append((start_date, end_date))
-        return raw_ifind_like_inputs(start_date, end_date)
+        return raw_market_inputs(start_date, end_date)
 
-    monkeypatch.setattr(fetch_ifind_snapshot, "fetch_raw_inputs", fake_fetch_raw_inputs)
+    monkeypatch.setattr(fetch_wind_snapshot, "fetch_raw_inputs", fake_fetch_raw_inputs)
 
-    snapshot_dir = fetch_ifind_snapshot.update_ifind_snapshot(snapshot_root=tmp_path, end="2024-03-01")
+    snapshot_dir = fetch_wind_snapshot.update_wind_snapshot(snapshot_root=tmp_path, end="2024-03-01")
 
     assert calls == [("2024-03-01", "2024-03-01")]
     assert snapshot_dir is not None
@@ -128,18 +128,21 @@ def test_ifind_snapshot_update_fetches_only_new_dates(monkeypatch, tmp_path) -> 
     assert latest_raw_data_date(raw) == pd.Timestamp("2024-03-01")
 
 
-def test_ifind_snapshot_update_initializes_when_no_base(monkeypatch, tmp_path) -> None:
+def test_wind_snapshot_update_initializes_when_no_base(monkeypatch, tmp_path) -> None:
     calls: list[tuple[str, str]] = []
 
-    def fake_full_refresh(snapshot_root, start_date: str, end_date: str, years: int):
+    def fake_fetch(_client, start_date, end_date):
         calls.append((start_date, end_date))
-        return snapshot_root / "fake_snapshot"
+        return raw_market_inputs("2026-06-08", "2026-06-12")
 
-    monkeypatch.setattr(fetch_ifind_snapshot, "_full_refresh", fake_full_refresh)
+    monkeypatch.setattr(fetch_wind_snapshot, "fetch_raw_inputs", fake_fetch)
+    archived = tmp_path / "legacy"
+    archived.mkdir()
+    (archived / "manifest.json").write_text('{"source":"ifind","created_at":"9999"}')
 
-    snapshot_dir = fetch_ifind_snapshot.update_ifind_snapshot(snapshot_root=tmp_path, end="2026-06-12", years=3)
-
-    assert snapshot_dir == tmp_path / "fake_snapshot"
+    snapshot_dir = fetch_wind_snapshot.update_wind_snapshot(snapshot_root=tmp_path, end="2026-06-12", years=3)
+    assert snapshot_dir is not None
+    assert archived.is_dir()
     assert calls == [("2023-06-12", "2026-06-12")]
 
 
@@ -185,3 +188,23 @@ class RecordingClient:
                 "rate": [1.5],
             }
         )
+
+
+def test_wind_incremental_rejects_explicit_ifind_base(tmp_path):
+    import pytest
+
+    (tmp_path / "manifest.json").write_text('{"source":"ifind"}')
+    with pytest.raises(ValueError, match="must be a Wind snapshot"):
+        fetch_wind_snapshot.update_wind_snapshot(tmp_path, base_snapshot=tmp_path)
+
+
+def test_late_overseas_close_updates_existing_domestic_day(tmp_path, monkeypatch):
+    raw = raw_market_inputs("2024-02-01", "2024-02-29")
+    overseas = raw["overseas_ohlcv"]
+    raw["overseas_ohlcv"] = overseas[~((overseas.symbol == "SPX.GI") & (overseas.date == "2024-02-29"))]
+    result = run_pipeline_from_raw(raw, CONFIG_DIR)
+    base = save_snapshot(result, tmp_path, "wind", "2024-02-01", "2024-02-29")
+    monkeypatch.setattr(fetch_wind_snapshot, "fetch_raw_inputs", lambda _, start, end: raw_market_inputs(start, end))
+    path = fetch_wind_snapshot.update_wind_snapshot(tmp_path / "out", end="2024-02-29", base_snapshot=base)
+    updated = load_snapshot_raw(path)["overseas_ohlcv"]
+    assert (updated.symbol.eq("SPX.GI") & updated.date.eq(pd.Timestamp("2024-02-29"))).sum() == 1

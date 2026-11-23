@@ -1472,7 +1472,7 @@ def _leakage_markdown(checks: Mapping[str, Any]) -> str:
 def _resolve_snapshot_dir(snapshot_dir: str | None, snapshot_root: str) -> Path:
     if snapshot_dir:
         return Path(snapshot_dir)
-    snapshots = list_snapshots(snapshot_root)
+    snapshots = list_snapshots(snapshot_root, source="wind")
     if not snapshots:
         raise FileNotFoundError(f"No snapshots found under {snapshot_root}.")
     return snapshots[0].path
@@ -1513,6 +1513,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         config=cfg,
         index_ohlcv=result.get("raw", {}).get("index_ohlcv"),
     )
+    report["snapshot"] = snapshot.name
     output = save_weight_diagnostic_report(report, args.output_dir)
     print(f"weight diagnostic report: {output}")
     print("adoption_status:", report["adoption_status"])

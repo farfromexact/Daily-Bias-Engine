@@ -17,8 +17,9 @@ bond_futures:
   TL: "TL.CFE"
 
 rates:
-  overnight_repo: "DR007.IB"
-  ten_year_cgb: "CGB10Y.IB"
+  seven_day_repo: "DR007.IB"
+  ten_year_cgb: "S0059749"
+  thirty_year_cgb: "S0059752"
 
 overseas:
   spx: "SPX.GI"

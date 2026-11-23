@@ -4,7 +4,7 @@
 
 ## 总体流程
 
-1. 使用 iFinD snapshot 获取真实日频数据。
+1. 使用 Wind snapshot 获取真实日频数据。
 2. 每个原始因子先计算 `raw_value`。
 3. 对 `raw_value` 做 20 日滚动 z-score，至少 3 个样本。
 4. 将 z-score 按方向映射到 `directional_score`：
@@ -22,7 +22,7 @@
 | `equity_index_futures_basis` | 股指期货结构 | 期货收盘价 / 沪深300收盘价 - 1 | 基差改善偏 Risk-On |
 | `futures_open_interest_momentum` | 股指期货结构 | 持仓量 5 日变化率 | 持仓上升偏 Risk-On |
 | `rates_change_5d` | 利率与债券 | `DR007.IB` 5 日差分 | 利率上行偏 Risk-Off |
-| `yield_curve_slope` | 利率与债券 | `L001618299` 30Y 国债到期收益率 - `L001619604` 10Y 国债到期收益率 | 曲线变陡暂偏 Risk-On |
+| `yield_curve_slope` | 利率与债券 | `S0059752` 30Y 国债到期收益率 - `S0059749` 10Y 国债到期收益率 | 曲线变陡暂偏 Risk-On |
 | `etf_flow_proxy` | ETF 与资金流 | ETF 成交额 5 日变化率 | 成交额放大偏 Risk-On |
 | `margin_balance_momentum` | ETF 与资金流 | 两融余额或 proxy 的 5 日变化率 | 杠杆资金回升偏 Risk-On |
 | `overseas_market_momentum` | 海外隔夜 | 美国、日本、韩国指数加权 1 日收益率，权重为 80% / 10% / 10% | 海外上涨偏 Risk-On |

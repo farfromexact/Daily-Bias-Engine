@@ -16,6 +16,8 @@ data/processed/
 data/features/
 data/signals/
 data/results/
+data/options_ifind/
+data/snapshots/*_ifind_*/
 data/options_ifind_probe/
 data/snapshots_probe/
 .streamlit_logs/

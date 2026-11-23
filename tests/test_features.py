@@ -8,11 +8,11 @@ from daily_bias_engine.features import (
     calculate_rates_and_bond_futures,
 )
 from daily_bias_engine.features.base import FACTOR_COLUMNS
-from tests.fixtures import raw_ifind_like_inputs
+from tests.fixtures import raw_market_inputs
 
 
 def test_all_feature_calculators_emit_required_schema() -> None:
-    raw = raw_ifind_like_inputs()
+    raw = raw_market_inputs()
 
     factors = calculate_all_features(
         index_ohlcv=raw["index_ohlcv"],

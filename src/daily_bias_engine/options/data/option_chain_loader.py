@@ -118,7 +118,7 @@ def normalize_option_chain(
     frame = frame.merge(ref_index, left_on="reference_index_code", right_on="symbol", how="left").drop(columns=["symbol"], errors="ignore")
 
     rate_row = rates.iloc[0].to_dict() if not rates.empty else {}
-    frame["risk_free_rate"] = float(rate_row.get("risk_free_rate", 0.02) or 0.02)
+    frame["risk_free_rate"] = float(rate_row.get("risk_free_rate", 0.02))
     frame["dividend_yield"] = float(rate_row.get("dividend_yield", 0.0) or 0.0)
 
     frame["dte_calendar"] = frame["expiry_date"].map(lambda expiry: calendar_days_to_expiry(trade_ts, expiry))

@@ -3,11 +3,10 @@
 This script is intentionally a data-source smoke test, not a model. It tries
 sources in this order for each indicator:
 
-1. iFinD
-2. Wind
-3. FRED via pandas_datareader, then FRED public CSV
-4. yfinance, then Yahoo public chart API
-5. Other stable public CSV sources
+1. Wind
+2. FRED via pandas_datareader, then FRED public CSV
+3. yfinance, then Yahoo public chart API
+4. Other stable public CSV sources
 
 Failures are recorded per indicator instead of stopping the run. Outputs:
 
@@ -25,7 +24,6 @@ import html
 from io import StringIO
 import json
 import math
-import os
 from pathlib import Path
 import sys
 import time
@@ -40,22 +38,17 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from daily_bias_engine.env import load_local_env
-
-
-load_local_env(PROJECT_ROOT)
+from daily_bias_engine.data.client import get_wind_session
 
 
 @dataclass(frozen=True)
 class IndicatorSpec:
     name: str
-    preferred_source: str = "iFinD"
+    preferred_source: str = "Wind"
     frequency_hint: str = ""
     fred_ids: tuple[str, ...] = ()
     yahoo_tickers: tuple[str, ...] = ()
     stooq_symbols: tuple[str, ...] = ()
-    ifind_edb_candidates: tuple[str, ...] = ()
-    ifind_hq_candidates: tuple[str, ...] = ()
     wind_candidates: tuple[str, ...] = ()
     comments: str = ""
     is_proxy: bool = False
@@ -79,7 +72,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="Fed Balance Sheet / Total Assets",
         frequency_hint="weekly",
         fred_ids=("WALCL",),
-        ifind_edb_candidates=("WALCL",),
         wind_candidates=("WALCL",),
         comments="Quantity of liquidity. FRED WALCL is in millions of USD.",
     ),
@@ -87,7 +79,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="ON RRP",
         frequency_hint="daily",
         fred_ids=("RRPONTSYD",),
-        ifind_edb_candidates=("RRPONTSYD",),
         wind_candidates=("RRPONTSYD",),
         comments="Quantity of liquidity. Falling ON RRP usually releases liquidity, so modeling direction should be inverted.",
     ),
@@ -95,7 +86,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="TGA",
         frequency_hint="weekly",
         fred_ids=("WTREGEN",),
-        ifind_edb_candidates=("WTREGEN",),
         wind_candidates=("WTREGEN",),
         comments="Treasury General Account. Rising TGA usually drains liquidity, so modeling direction should be inverted.",
     ),
@@ -103,7 +93,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="SOFR",
         frequency_hint="daily",
         fred_ids=("SOFR",),
-        ifind_edb_candidates=("SOFR",),
         wind_candidates=("SOFR",),
         comments="Funding price, not funding quantity.",
     ),
@@ -111,7 +100,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="Effective Fed Funds Rate",
         frequency_hint="daily",
         fred_ids=("DFF", "FEDFUNDS"),
-        ifind_edb_candidates=("DFF", "FEDFUNDS"),
         wind_candidates=("DFF", "FEDFUNDS"),
         comments="Funding price, not funding quantity.",
     ),
@@ -119,7 +107,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="3M Treasury Yield",
         frequency_hint="daily",
         fred_ids=("DGS3MO", "DTB3", "TB3MS"),
-        ifind_edb_candidates=("DGS3MO", "DTB3", "TB3MS"),
         wind_candidates=("DGS3MO", "DTB3", "TB3MS", "USGG3M.GBM"),
         comments="Funding price / front-end rate.",
     ),
@@ -127,7 +114,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="2Y Treasury Yield",
         frequency_hint="daily",
         fred_ids=("DGS2",),
-        ifind_edb_candidates=("DGS2",),
         wind_candidates=("DGS2", "USGG2YR.GBM"),
         comments="Treasury yield curve point.",
     ),
@@ -135,7 +121,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="10Y Treasury Yield",
         frequency_hint="daily",
         fred_ids=("DGS10",),
-        ifind_edb_candidates=("DGS10",),
         wind_candidates=("DGS10", "USGG10YR.GBM"),
         comments="Treasury yield curve point.",
     ),
@@ -143,7 +128,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="30Y Treasury Yield",
         frequency_hint="daily",
         fred_ids=("DGS30",),
-        ifind_edb_candidates=("DGS30",),
         wind_candidates=("DGS30", "USGG30YR.GBM"),
         comments="Treasury yield curve point.",
     ),
@@ -151,7 +135,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="10Y TIPS Yield / real yield",
         frequency_hint="daily",
         fred_ids=("DFII10",),
-        ifind_edb_candidates=("DFII10",),
         wind_candidates=("DFII10",),
         comments="Real yield. Useful for liquidity/financial-conditions dashboarding.",
     ),
@@ -160,7 +143,6 @@ INDICATORS: list[IndicatorSpec] = [
         frequency_hint="daily",
         yahoo_tickers=("DX-Y.NYB", "DX=F"),
         stooq_symbols=("dxy", "dx.f"),
-        ifind_hq_candidates=("DXY.NYB", "DX-Y.NYB", "DX=F"),
         wind_candidates=("DXY.NYB", "DX-Y.NYB", "DX=F"),
         comments="Exact DXY preferred. FRED broad trade-weighted USD is not treated as DXY success.",
     ),
@@ -170,7 +152,6 @@ INDICATORS: list[IndicatorSpec] = [
         fred_ids=("VIXCLS",),
         yahoo_tickers=("^VIX",),
         stooq_symbols=("vix",),
-        ifind_hq_candidates=("VIX.GI", "^VIX"),
         wind_candidates=("VIX.GI", "^VIX", "VIXCLS"),
         comments="Risk appetite / financial conditions.",
     ),
@@ -179,7 +160,6 @@ INDICATORS: list[IndicatorSpec] = [
         frequency_hint="daily",
         yahoo_tickers=("^MOVE", "MOVE"),
         stooq_symbols=("move",),
-        ifind_hq_candidates=("MOVE.GI", "^MOVE"),
         wind_candidates=("MOVE.GI", "^MOVE"),
         comments="Rates volatility / financial conditions. Public availability may be weaker than VIX.",
     ),
@@ -187,7 +167,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="HY OAS / High Yield Spread",
         frequency_hint="daily",
         fred_ids=("BAMLH0A0HYM2",),
-        ifind_edb_candidates=("BAMLH0A0HYM2",),
         wind_candidates=("BAMLH0A0HYM2",),
         comments="Credit spread / risk appetite.",
     ),
@@ -195,7 +174,6 @@ INDICATORS: list[IndicatorSpec] = [
         name="Investment Grade OAS / BBB OAS",
         frequency_hint="daily",
         fred_ids=("BAMLC0A4CBBB", "BAMLC0A0CM"),
-        ifind_edb_candidates=("BAMLC0A4CBBB", "BAMLC0A0CM"),
         wind_candidates=("BAMLC0A4CBBB", "BAMLC0A0CM"),
         comments="Credit spread / risk appetite. BBB OAS is tried before broad IG OAS.",
     ),
@@ -237,7 +215,6 @@ def main() -> None:
     parser.add_argument("--end", default=None, help="End date. Default: today.")
     parser.add_argument("--output-dir", default=str(PROJECT_ROOT / "data"), help="Directory for CSV outputs.")
     parser.add_argument("--chart-dir", default=None, help="Directory for SVG charts. Default: data/liquidity_charts.")
-    parser.add_argument("--skip-ifind", action="store_true", help="Skip iFinD attempts.")
     parser.add_argument("--skip-wind", action="store_true", help="Skip Wind attempts.")
     parser.add_argument("--skip-fred", action="store_true", help="Skip FRED attempts.")
     parser.add_argument("--skip-yahoo", action="store_true", help="Skip Yahoo/yfinance attempts.")
@@ -261,7 +238,6 @@ def main() -> None:
             spec,
             start,
             end,
-            skip_ifind=args.skip_ifind,
             skip_wind=args.skip_wind,
             skip_fred=args.skip_fred,
             skip_yahoo=args.skip_yahoo,
@@ -298,7 +274,6 @@ def probe_indicator(
     start: pd.Timestamp,
     end: pd.Timestamp,
     *,
-    skip_ifind: bool,
     skip_wind: bool,
     skip_fred: bool,
     skip_yahoo: bool,
@@ -307,8 +282,6 @@ def probe_indicator(
     attempts: list[str] = []
     source_calls: list[tuple[str, Callable[[], FetchResult]]] = []
 
-    if not skip_ifind:
-        source_calls.append(("iFinD", lambda: fetch_ifind_series(spec, start, end)))
     if not skip_wind:
         source_calls.append(("Wind", lambda: fetch_wind_series(spec, start, end)))
     if not skip_fred:
@@ -343,85 +316,27 @@ def probe_indicator(
     )
 
 
-def fetch_ifind_series(spec: IndicatorSpec, start: pd.Timestamp, end: pd.Timestamp) -> FetchResult:
-    candidates = list(spec.ifind_edb_candidates) + list(spec.ifind_hq_candidates)
-    if not candidates:
-        return failure(spec, "iFinD", "", "No iFinD candidates configured.")
-    username = os.environ.get("IFIND_USERNAME")
-    password = os.environ.get("IFIND_PASSWORD")
-    if not username or not password:
-        return failure(spec, "iFinD", ",".join(candidates), "Missing IFIND_USERNAME/IFIND_PASSWORD.")
-    try:
-        from iFinDPy import THS_EDB, THS_HQ, THS_GetErrorInfo, THS_iFinDLogin, THS_iFinDLogout
-    except Exception as exc:
-        return failure(spec, "iFinD", ",".join(candidates), f"iFinDPy unavailable: {type(exc).__name__}: {exc}")
-
-    login_code = THS_iFinDLogin(username, password)
-    if login_code != 0:
-        try:
-            message = THS_GetErrorInfo(login_code)
-        except Exception:
-            message = str(login_code)
-        return failure(spec, "iFinD", ",".join(candidates), f"iFinD login failed: {message}")
-
-    errors: list[str] = []
-    try:
-        for code in spec.ifind_edb_candidates:
-            result = THS_EDB(code, "", date_text(start), date_text(end))
-            series, error = parse_ifind_result(result, code)
-            if error:
-                errors.append(f"EDB {code}: {error}")
-                continue
-            return success(spec, "iFinD", code, series, comments=spec.comments)
-        for code in spec.ifind_hq_candidates:
-            result = THS_HQ(code, "close", "", date_text(start), date_text(end))
-            series, error = parse_ifind_result(result, code)
-            if error:
-                errors.append(f"HQ {code}: {error}")
-                continue
-            return success(spec, "iFinD", code, series, comments=spec.comments)
-    finally:
-        try:
-            THS_iFinDLogout()
-        except Exception:
-            pass
-    return failure(spec, "iFinD", ",".join(candidates), "; ".join(errors) or "No iFinD data returned.")
-
-
 def fetch_wind_series(spec: IndicatorSpec, start: pd.Timestamp, end: pd.Timestamp) -> FetchResult:
     candidates = list(spec.wind_candidates)
     if not candidates:
         return failure(spec, "Wind", "", "No Wind candidates configured.")
-    try:
-        from WindPy import w
-    except Exception as exc:
-        return failure(spec, "Wind", ",".join(candidates), f"WindPy unavailable: {type(exc).__name__}: {exc}")
-
-    try:
-        start_result = w.start()
-        if getattr(start_result, "ErrorCode", 0) != 0:
-            return failure(spec, "Wind", ",".join(candidates), f"Wind start failed: {wind_error(start_result)}")
-        errors = []
-        for code in candidates:
-            for method in ("wsd", "edb"):
-                try:
-                    if method == "wsd":
-                        result = w.wsd(code, "close", date_text(start), date_text(end), "PriceAdj=F")
-                    else:
-                        result = w.edb(code, date_text(start), date_text(end), "")
-                    series, error = parse_wind_result(result, code)
-                    if error:
-                        errors.append(f"{method} {code}: {error}")
-                        continue
-                    return success(spec, "Wind", code, series, comments=spec.comments)
-                except Exception as exc:
-                    errors.append(f"{method} {code}: {type(exc).__name__}: {exc}")
-        return failure(spec, "Wind", ",".join(candidates), "; ".join(errors) or "No Wind data returned.")
-    finally:
-        try:
-            w.stop()
-        except Exception:
-            pass
+    w = get_wind_session()
+    errors = []
+    for code in candidates:
+        for method in ("wsd", "edb"):
+            try:
+                if method == "wsd":
+                    result = w.wsd(code, "close", date_text(start), date_text(end), "PriceAdj=F")
+                else:
+                    result = w.edb(code, date_text(start), date_text(end), "")
+                series, error = parse_wind_result(result, code)
+                if error:
+                    errors.append(f"{method} {code}: {error}")
+                    continue
+                return success(spec, "Wind", code, series, comments=spec.comments)
+            except Exception as exc:
+                errors.append(f"{method} {code}: {type(exc).__name__}: {exc}")
+    return failure(spec, "Wind", ",".join(candidates), "; ".join(errors) or "No Wind data returned.")
 
 
 def fetch_fred_series(spec: IndicatorSpec, start: pd.Timestamp, end: pd.Timestamp) -> FetchResult:
@@ -504,7 +419,6 @@ def fetch_benchmarks(start: pd.Timestamp, end: pd.Timestamp, args: argparse.Name
             spec,
             start,
             end,
-            skip_ifind=True,
             skip_wind=True,
             skip_fred=args.skip_fred,
             skip_yahoo=args.skip_yahoo,
@@ -601,26 +515,6 @@ def fetch_stooq_csv(symbol: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.S
     dates = pd.to_datetime(frame["Date"], errors="coerce")
     values = pd.to_numeric(frame[close_col], errors="coerce")
     return clean_series(pd.Series(values.to_numpy(), index=dates, name=symbol))
-
-
-def parse_ifind_result(result: Any, code: str) -> tuple[pd.Series, str]:
-    errorcode = getattr(result, "errorcode", 0)
-    if errorcode not in (0, None):
-        errmsg = getattr(result, "errmsg", "")
-        return pd.Series(dtype=float), f"errorcode={errorcode}; errmsg={errmsg}"
-    data = getattr(result, "data", None)
-    if not isinstance(data, pd.DataFrame) or data.empty:
-        return pd.Series(dtype=float), "empty data"
-    frame = data.copy()
-    date_col = pick_column(frame, ("time", "date", "datetime", "trade_date"))
-    value_col = pick_column(frame, ("value", "close", "CLOSE", code))
-    if date_col is None or value_col is None:
-        return pd.Series(dtype=float), f"cannot identify date/value columns: {list(frame.columns)}"
-    series = pd.Series(pd.to_numeric(frame[value_col], errors="coerce").to_numpy(), index=pd.to_datetime(frame[date_col], errors="coerce"), name=code)
-    series = clean_series(series)
-    if series.empty:
-        return series, "all values are empty"
-    return series, ""
 
 
 def parse_wind_result(result: Any, code: str) -> tuple[pd.Series, str]:
@@ -872,13 +766,8 @@ def print_summary(
     print(f"indicator_success={len(successes)}/{len(availability)}")
     if not successes.empty:
         print("sources_found=" + json.dumps(successes["actual_source_found"].value_counts().to_dict(), ensure_ascii=False))
-    ifind_count = int((successes["actual_source_found"] == "iFinD").sum()) if not successes.empty else 0
     wind_count = int((successes["actual_source_found"] == "Wind").sum()) if not successes.empty else 0
-    if ifind_count or wind_count:
-        answer = f"iFinD/Wind partial support: iFinD={ifind_count}, Wind={wind_count} successful indicators."
-    else:
-        answer = "iFinD/Wind support not confirmed in this run; dashboard would need FRED/Yahoo/public fallbacks unless local terminals are fixed."
-    print("liquidity_dashboard_answer=" + answer)
+    print(f"wind_indicators={wind_count}/{len(availability)}")
     print(f"raw_panel_shape={raw_panel.shape}")
 
 

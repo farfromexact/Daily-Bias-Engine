@@ -1,7 +1,7 @@
 # Option State Layer
 
 This package adds an A-share index option state layer for `SSE50`, `CSI300`,
-and `CSI1000`. It is designed to run from localized iFinD option snapshots.
+and `CSI1000`. It is designed to run from localized Wind option snapshots.
 
 ## Data Requirements
 
@@ -14,8 +14,7 @@ The normalized chain expects one row per option contract and date:
 - underlying and reference index close
 - risk-free rate and dividend or forward adjustment
 
-iFinD calls are isolated in `data/ifind_client.py`. No iFinD credentials are
-hardcoded. Use `scripts/fetch_ifind_options_snapshot.py` to fetch iFinD option
+WindPy queries use the official desktop API session through `data/wind_client.py`. Use `scripts/fetch_wind_options_snapshot.py` to fetch Wind option
 data and persist normalized parquet chains before running reports or model
 code.
 
@@ -75,11 +74,11 @@ and risk scores, then compares base, option-only, and combined variants.
 Example:
 
 ```bash
-python scripts/fetch_ifind_options_snapshot.py --date 2026-06-07 --product CSI300
-python -m daily_bias_engine.options.reports.daily_option_state --date 2026-06-07 --product CSI300 --data-root data/options_ifind
+python scripts/fetch_wind_options_snapshot.py --date 2026-11-20 --product CSI300
+python -m daily_bias_engine.options.reports.daily_option_state --date 2026-11-20 --product CSI300 --data-root data/options_wind
 ```
 
 The command emits a JSON payload with regime, scores, key levels, exposures, vol,
 skew, and recommended overlay fields. It reads local parquet data under
-`data/options_ifind/` and fails fast if the requested product/date has not been
+`data/options_wind/` and fails fast if the requested product/date has not been
 localized yet.

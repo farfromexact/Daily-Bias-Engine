@@ -22,7 +22,7 @@ def generate_daily_option_state(
     product_group: str,
     *,
     store: OptionMarketDataStore | None = None,
-    data_root: str | Path = Path("data/options"),
+    data_root: str | Path = Path("data/options_wind"),
     mode: ExposureMode | str = ExposureMode.DEALER_SHORT_OPTIONS,
     underlying_history: pd.DataFrame | None = None,
     historical_factors: pd.DataFrame | None = None,
@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Generate a daily A-share index option state report.")
     parser.add_argument("--date", required=True, help="Trade date, YYYY-MM-DD.")
     parser.add_argument("--product", required=True, choices=["SSE50", "CSI300", "CSI1000"], help="Product group.")
-    parser.add_argument("--data-root", default="data/options", help="Root directory for localized option parquet data.")
+    parser.add_argument("--data-root", default="data/options_wind", help="Root directory for localized option parquet data.")
     parser.add_argument("--mode", default=ExposureMode.DEALER_SHORT_OPTIONS.value, choices=[mode.value for mode in ExposureMode])
     parser.add_argument("--markdown", action="store_true", help="Print markdown summary after JSON.")
     args = parser.parse_args(argv)

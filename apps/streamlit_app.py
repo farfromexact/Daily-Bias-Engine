@@ -28,11 +28,12 @@ from daily_bias_engine.pipeline import (
     list_snapshots,
     run_pipeline_from_snapshot,
 )
+from daily_bias_engine.options.data import OptionMarketDataStore
 from daily_bias_engine.options.reports.daily_option_state import generate_daily_option_state
 
 CONFIG_DIR = PROJECT_ROOT / "configs"
 SNAPSHOT_ROOT = PROJECT_ROOT / "data" / "snapshots"
-OPTION_DATA_ROOT = PROJECT_ROOT / "data" / "options_ifind"
+OPTION_DATA_ROOT = PROJECT_ROOT / "data" / "options_wind"
 WEIGHT_REPORT_ROOT = PROJECT_ROOT / "reports" / "weight_optimizer"
 LIQUIDITY_AVAILABILITY_PATH = PROJECT_ROOT / "data" / "liquidity_data_availability.csv"
 LIQUIDITY_RAW_PANEL_PATH = PROJECT_ROOT / "data" / "liquidity_raw_panel.csv"
@@ -68,7 +69,7 @@ Daily Bias Engine 是一个盘前市场风向仪。它不直接给交易指令�
 
 ### 为什么有些数据看起来是 proxy
 
-系统使用的底层数据是真实 iFinD 本地数据，但有些因子本身是 proxy。例如 ETF 成交额用于近似 ETF 资金流，A 股宽度用 50、300、科创、创业板指数涨跌来近似市场广度。proxy 的含义是“因子口径是替代变量”，不是假数据。
+系统使用的底层数据是真实 Wind 本地数据，但有些因子本身是 proxy。例如 ETF 成交额用于近似 ETF 资金流，A 股宽度用 50、300、科创、创业板指数涨跌来近似市场广度。proxy 的含义是“因子口径是替代变量”，不是假数据。
 """
 
 HELP_TEXT = {
@@ -107,9 +108,9 @@ HELP_TEXT = {
     "factor_sort_mode": "选择因子诊断表的排序口径：按亏损识别能力、方向收益关系，或寻找关系弱/反向的因子。",
     "factor_quintile": "查看单个因子分成五档后，后续市场表现是否有单调性。它用于判断因子有没有稳定区分度。",
     "section_logic": "Logic 页解释系统如何从真实数据生成因子、因子如何变成方向分、方向分如何合成总分。",
-    "section_options": "Options 页读取本地 iFinD 期权链，计算关键行权价、GEX、Vanna、Charm、隐波和偏度结构，用于辅助指数风险和波动率判断。",
+    "section_options": "Options 页读取本地 Wind 期权链，计算关键行权价、GEX、Vanna、Charm、隐波和偏度结构，用于辅助指数风险和波动率判断。",
     "option_product": "选择期权品种：SSE50、CSI300、CSI1000。不同品种对应不同指数和期权链。",
-    "option_trade_date": "选择期权链交易日。期权数据必须等 iFinD 有完整当日链和参考收盘价后才能落地。",
+    "option_trade_date": "选择期权链交易日。期权数据必须等 Wind 有完整当日链和参考收盘价后才能落地。",
     "section_option_key_levels": "关键价位包括现货、put wall、call wall、最大 gamma 行权价等，用于观察期权仓位可能影响的价格区域。",
     "section_option_exposures": "敞口展示 GEX、Vanna、Charm、Vega 等聚合结果。它们衡量做市商对价格、波动率和时间变化的敏感度。",
     "section_option_vol": "波动率和偏度展示 30 日 IV、偏度、风险反转等，用于判断波动率风险溢价和尾部保护需求。",
@@ -138,7 +139,7 @@ HELP_TEXT = {
     "metric_optimized_weights": "优化器根据历史 walk-forward 诊断得到的研究权重，只用于评估，不代表已经采用。",
     "metric_blended_weights": "候选 blended 权重：0.6 当前权重 + 0.4 优化权重，并经过约束投影。仍需人工批准。",
     "metric_adoption_status": "采用状态。当前系统默认 shadow mode，表示只展示研究结果，不自动覆盖生产配置。",
-    "section_liquidity": "Liquidity 页只读取本地 CSV/SVG 文件，不会在 Streamlit 运行时访问 iFinD、Wind、FRED、Yahoo 或其他在线源。",
+    "section_liquidity": "Liquidity 页只读取本地 CSV/SVG 文件，不会在 Streamlit 运行时访问 Wind、FRED、Yahoo 或其他在线源。",
     "section_liquidity_availability": "数据可得性表记录每个美元流动性指标最终由哪个本地拉数结果支持，以及失败原因。",
     "section_liquidity_panel": "Raw panel 是本地拉取后的宽表。后续部署时把这个 CSV 一起提交到 Git，Streamlit 只负责展示。",
 }
@@ -148,7 +149,7 @@ def run_dashboard_pipeline(snapshot_dir: str | Path | None = None) -> dict[str, 
     """Run the dashboard pipeline from a local market-data snapshot."""
 
     if snapshot_dir is None:
-        snapshots = list_snapshots(SNAPSHOT_ROOT)
+        snapshots = list_snapshots(SNAPSHOT_ROOT, source="wind")
         if not snapshots:
             raise FileNotFoundError(f"No local market snapshot found under {SNAPSHOT_ROOT}.")
         snapshot_dir = snapshots[0].path
@@ -194,7 +195,10 @@ def _cached_dashboard_result(snapshot_dir: str | None) -> dict[str, Any]:
 
 
 @st.cache_data(show_spinner="Loading local option state...")
-def _cached_option_state(product_group: str, trade_date: str, data_root: str) -> tuple[pd.DataFrame, dict[str, Any], dict[str, pd.DataFrame]]:
+def _cached_option_state(
+    product_group: str, trade_date: str, data_root: str, snapshot_mtime_ns: int
+) -> tuple[pd.DataFrame, dict[str, Any], dict[str, pd.DataFrame]]:
+    _ = snapshot_mtime_ns
     factors, payload, _, plots = generate_daily_option_state(
         trade_date,
         product_group,
@@ -241,7 +245,7 @@ def main() -> None:
     st.title("市场风向机 / Daily Bias Engine")
     _render_first_time_guide()
 
-    snapshots = list_snapshots(SNAPSHOT_ROOT)
+    snapshots = list_snapshots(SNAPSHOT_ROOT, source="wind")
     snapshot_info = snapshots[0] if snapshots else None
     result, data_warning = _load_dashboard_data(snapshot_info)
     if result is None:
@@ -473,9 +477,7 @@ def main() -> None:
 
             日收盘数据只生成下一交易日的开盘前信号，因此表里的 `data_date` 必须早于 `date`。
 
-            **注意：当前快照来自真实 iFinD 本地数据。这里的 proxy 通常指“因子口径是替代变量”，
-            不是说底层行情是假数据。** 例如 ETF 成交额是真实 iFinD 数据，但它只是 ETF 净申购的
-            proxy；指数样本上涨比例是真实 iFinD 价格派生结果，但它只是全市场上涨家数的 proxy。
+            模型用 Wind ETF 成交额近似资金参与度，用样本指数的上涨比例近似市场广度。
             """
         )
         st.dataframe(pd.DataFrame(factor_logic_rows()), width="stretch")
@@ -502,11 +504,11 @@ def _available_option_snapshots(data_root: Path | str = OPTION_DATA_ROOT) -> dic
 
 def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
     _subheader("Local Option State", "section_options")
-    st.caption(f"Source: iFinD local option chains at {OPTION_DATA_ROOT / 'normalized_chain'}")
+    st.caption(f"Source: Wind local option chains at {OPTION_DATA_ROOT / 'normalized_chain'}")
     if not option_snapshots:
         st.info(
             "No local option snapshots found. Run "
-            "`python scripts/fetch_ifind_options_snapshot.py --date YYYY-MM-DD --product CSI300 --data-root data/options_ifind` first."
+            "`python scripts/fetch_wind_options_snapshot.py --date YYYY-MM-DD --product CSI300 --data-root data/options_wind` first."
         )
         return
 
@@ -520,7 +522,8 @@ def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
         trade_date = st.selectbox("Trade date", dates, index=len(dates) - 1, help=_help_text("option_trade_date"))
 
     try:
-        factors, payload, plots = _cached_option_state(product_group, trade_date, str(OPTION_DATA_ROOT))
+        path = OptionMarketDataStore(OPTION_DATA_ROOT).chain_path(product_group, trade_date)
+        factors, payload, plots = _cached_option_state(product_group, trade_date, str(OPTION_DATA_ROOT), path.stat().st_mtime_ns)
     except Exception as exc:
         st.error(f"Local option state failed: {exc}")
         return
@@ -904,7 +907,7 @@ def _render_option_chart(
 
 def _load_dashboard_data(snapshot_info: SnapshotInfo | None) -> tuple[dict[str, Any] | None, str]:
     if snapshot_info is None:
-        return None, f"No local market snapshot found under {SNAPSHOT_ROOT}. Run `python scripts/fetch_ifind_snapshot.py` first."
+        return None, f"No local market snapshot found under {SNAPSHOT_ROOT}. Run `python scripts/fetch_wind_snapshot.py` first."
     try:
         result = _cached_dashboard_result(str(snapshot_info.path))
         return result, str(result.get("snapshot_load_warning", ""))
@@ -1671,7 +1674,7 @@ def _direction_label(value: Any) -> str:
 def _data_mode_label(value: str) -> str:
     labels = {
         "snapshot": "Local market snapshot",
-        "ifind": "Localized iFinD data",
+        "wind": "Localized Wind data",
     }
     return labels.get(value, value)
 

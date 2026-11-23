@@ -30,6 +30,15 @@ RAW_TABLES = [
 OVERSEAS_INDEX_SYMBOLS = ["SPX.GI", "N225.GI", "KS11.GI"]
 ASHARE_STRUCTURE_SYMBOLS = ["000016.SH", "000300.SH", "000688.SH", "399006.SZ"]
 RATE_SERIES = ["DR007.IB", "CGB10Y", "CGB30Y"]
+MARKET_UNIVERSE = {
+    "index_ohlcv": ["000300.SH"],
+    "futures_ohlcv": ["IF.CFE"],
+    "open_interest": ["IF.CFE"],
+    "rates": RATE_SERIES,
+    "etf_flow": ["510300.SH", "510500.SH"],
+    "overseas_ohlcv": OVERSEAS_INDEX_SYMBOLS,
+    "ashare_ohlcv": ASHARE_STRUCTURE_SYMBOLS,
+}
 RAW_DEDUP_KEYS = {
     "index_ohlcv": ["date", "symbol"],
     "futures_ohlcv": ["date", "symbol"],
@@ -71,16 +80,16 @@ def fetch_raw_inputs(
 ) -> dict[str, pd.DataFrame]:
     """Fetch raw inputs used by the current MVP factor set."""
 
-    etf_flow = _with_margin_balance(client.get_daily_ohlcv(["510300.SH", "510500.SH"], start_date, end_date))
-    return {
-        "index_ohlcv": client.get_daily_ohlcv(["000300.SH"], start_date, end_date),
-        "futures_ohlcv": client.get_daily_ohlcv(["IF.CFE"], start_date, end_date),
-        "open_interest": client.get_futures_open_interest(["IF.CFE"], start_date, end_date),
-        "rates": client.get_interest_rates(RATE_SERIES, start_date, end_date),
-        "etf_flow": etf_flow,
-        "overseas_ohlcv": client.get_daily_ohlcv(OVERSEAS_INDEX_SYMBOLS, start_date, end_date),
-        "ashare_ohlcv": client.get_daily_ohlcv(ASHARE_STRUCTURE_SYMBOLS, start_date, end_date),
-    }
+    raw = {}
+    for table, symbols in MARKET_UNIVERSE.items():
+        if table == "rates":
+            raw[table] = client.get_interest_rates(symbols, start_date, end_date)
+        elif table == "open_interest":
+            raw[table] = client.get_futures_open_interest(symbols, start_date, end_date)
+        else:
+            raw[table] = client.get_daily_ohlcv(symbols, start_date, end_date)
+    raw["etf_flow"] = _with_margin_balance(raw["etf_flow"])
+    return raw
 
 
 def latest_raw_data_date(raw: Mapping[str, pd.DataFrame], table: str = "index_ohlcv") -> pd.Timestamp | None:
@@ -147,6 +156,8 @@ def _merge_raw_table(table: str, base: pd.DataFrame, incoming: pd.DataFrame) -> 
 def _latest_business_day(date_value: str | pd.Timestamp | None = None) -> pd.Timestamp:
     if date_value is None:
         value = pd.Timestamp.now(tz="Asia/Shanghai")
+        if (value.hour, value.minute) < (16, 30):
+            value -= pd.Timedelta(days=1)
     else:
         value = pd.Timestamp(date_value)
     if value.tzinfo is not None:
@@ -250,7 +261,7 @@ def save_snapshot(
     return snapshot_dir
 
 
-def list_snapshots(snapshot_root: Path | str) -> list[SnapshotInfo]:
+def list_snapshots(snapshot_root: Path | str, *, source: str | None = None) -> list[SnapshotInfo]:
     root = Path(snapshot_root)
     if not root.exists():
         return []
@@ -260,6 +271,8 @@ def list_snapshots(snapshot_root: Path | str) -> list[SnapshotInfo]:
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
+            continue
+        if source is not None and manifest.get("source") != source:
             continue
         latest = manifest.get("latest", {})
         label = (

@@ -1,10 +1,9 @@
 from pathlib import Path
-import sys
-import types
+from types import SimpleNamespace
 
 import pandas as pd
 
-from daily_bias_engine.data import IFindDataClient, RawDataCache
+from daily_bias_engine.data import WindPyDataClient, RawDataCache
 
 
 def test_raw_data_cache_writes_append_only_snapshots(tmp_path: Path) -> None:
@@ -28,100 +27,26 @@ def test_raw_data_cache_writes_append_only_snapshots(tmp_path: Path) -> None:
     pd.testing.assert_frame_equal(cache.read_snapshot(first_path), frame)
 
 
-def test_ifind_client_maps_project_symbols(monkeypatch) -> None:
-    calls: list[str] = []
+def test_wind_history_maps_turnover_and_omits_unpublished_closes(monkeypatch) -> None:
+    def wsd(code, fields, start, end, options):
+        assert code == "IF.CFE"
+        assert fields == "open,high,low,close,volume,amt"
+        assert "Fill=Blank" in options
+        return SimpleNamespace(ErrorCode=0, Codes=[code], Fields=fields.upper().split(","),
+                               Times=[start, end], Data=[[3, None], [4, None], [2, None], [3.5, 3.5], [100, None], [350, None]])
 
-    def login(username: str, password: str) -> int:
-        return 0
-
-    def logout() -> int:
-        return 0
-
-    def hq(thscode: str, *_args: object):
-        calls.append(thscode)
-        return types.SimpleNamespace(
-            errorcode=0,
-            errmsg="",
-            data=pd.DataFrame(
-                [
-                    {
-                        "time": "2026-06-12",
-                        "thscode": thscode,
-                        "open": 1.0,
-                        "high": 1.2,
-                        "low": 0.9,
-                        "close": 1.1,
-                        "volume": 100,
-                        "amount": 110.0,
-                    }
-                ]
-            ),
-        )
-
-    module = types.SimpleNamespace(
-        THS_iFinDLogin=login,
-        THS_iFinDLogout=logout,
-        THS_GetErrorInfo=lambda code: f"error {code}",
-        THS_HQ=hq,
-    )
-    monkeypatch.setitem(sys.modules, "iFinDPy", module)
-    monkeypatch.setenv("IFIND_USERNAME", "user")
-    monkeypatch.setenv("IFIND_PASSWORD", "password")
-
-    client = IFindDataClient()
-    frame = client.get_daily_ohlcv(["IF.CFE", "N225.GI", "KS11.GI"], "2026-06-12", "2026-06-12")
-    client.close()
-
-    assert calls == ["IF00.CFE", "N225.GI", "KS11.GI"]
-    assert sorted(frame["symbol"].tolist()) == ["IF.CFE", "KS11.GI", "N225.GI"]
-    assert set(["date", "symbol", "open", "high", "low", "close", "volume", "amount", "asof_time", "source"]).issubset(
-        frame.columns
-    )
+    monkeypatch.setattr("daily_bias_engine.data.client.get_wind_session", lambda: SimpleNamespace(wsd=wsd))
+    bars = WindPyDataClient().get_daily_ohlcv(["IF.CFE"], "2026-11-20", "2026-11-23")
+    assert list(bars["date"]) == [pd.Timestamp("2026-11-20")]
+    assert bars.iloc[0][["symbol", "amount", "close", "source"]].tolist() == ["IF.CFE", 350, 3.5, "wind"]
 
 
-def test_ifind_client_fetches_edb_yield_series(monkeypatch) -> None:
-    calls: list[str] = []
+def test_wind_edb_yields_keep_tenors_and_requested_dates(monkeypatch) -> None:
+    def edb(code, start, end, options):
+        return SimpleNamespace(ErrorCode=0, Codes=[code], Fields=["close"], Times=["2010-07-30", start],
+                               Data=[[None, {"S0059749": 1.7402, "S0059752": 2.2555}[code]]])
 
-    def login(username: str, password: str) -> int:
-        return 0
-
-    def logout() -> int:
-        return 0
-
-    def edb(indicator_id: str, *_args: object):
-        calls.append(indicator_id)
-        names = {
-            "L001618299": "中债国债到期收益率:30年",
-            "L001619604": "中债国债到期收益率:10年",
-        }
-        return types.SimpleNamespace(
-            errorcode=0,
-            errmsg="",
-            data=pd.DataFrame(
-                [
-                    {
-                        "time": "2026-06-12",
-                        "index_name": names[indicator_id],
-                        "value": 2.2215 if indicator_id == "L001618299" else 1.7427,
-                    }
-                ]
-            ),
-        )
-
-    module = types.SimpleNamespace(
-        THS_iFinDLogin=login,
-        THS_iFinDLogout=logout,
-        THS_GetErrorInfo=lambda code: f"error {code}",
-        THS_EDB=edb,
-    )
-    monkeypatch.setitem(sys.modules, "iFinDPy", module)
-    monkeypatch.setenv("IFIND_USERNAME", "user")
-    monkeypatch.setenv("IFIND_PASSWORD", "password")
-
-    client = IFindDataClient()
-    frame = client.get_interest_rates(["CGB10Y", "CGB30Y"], "2026-06-12", "2026-06-12")
-    client.close()
-
-    assert calls == ["L001619604", "L001618299"]
-    assert frame.set_index("series")["rate"].to_dict() == {"CGB10Y": 1.7427, "CGB30Y": 2.2215}
-    assert set(frame["source"]) == {"ifind_edb"}
+    monkeypatch.setattr("daily_bias_engine.data.client.get_wind_session", lambda: SimpleNamespace(edb=edb))
+    frame = WindPyDataClient().get_interest_rates(["CGB30Y", "CGB10Y"], "2026-07-14", "2026-07-14")
+    assert frame.set_index("series")["rate"].to_dict() == {"CGB10Y": 1.7402, "CGB30Y": 2.2555}
+    assert frame["source"].eq("wind_edb").all()

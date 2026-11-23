@@ -13,7 +13,8 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from daily_bias_engine.options.data import OptionMarketDataStore, WindPyIFindFallbackOptionClient, WindPyOptionClient, load_normalized_chain
+from daily_bias_engine.options.data import OptionMarketDataStore, WindPyOptionClient, load_normalized_chain
+from daily_bias_engine.pipeline import default_history_range
 
 
 def main() -> None:
@@ -27,46 +28,37 @@ def main() -> None:
         choices=["SSE50", "CSI300", "CSI1000"],
         help="Product group to fetch. Repeat the flag to fetch multiple groups. Defaults to all groups.",
     )
-    parser.add_argument("--data-root", default=str(PROJECT_ROOT / "data" / "options"), help="Option parquet output root.")
+    parser.add_argument("--data-root", default=str(PROJECT_ROOT / "data" / "options_wind"), help="Option parquet output root.")
     parser.add_argument("--overwrite", action="store_true", help="Refetch and overwrite existing local parquet files.")
     parser.add_argument("--fail-fast", action="store_true", help="Stop immediately when a product/date fetch fails.")
-    parser.add_argument(
-        "--quote-fallback",
-        choices=["none", "ifind"],
-        default="none",
-        help="Fallback quote provider when Wind WSD is quota-limited. Defaults to none.",
-    )
     parser.add_argument("--active-only", action="store_true", help="Persist only contracts with positive price, volume, or open interest.")
     args = parser.parse_args()
 
     products = args.product or ["SSE50", "CSI300", "CSI1000"]
-    client = WindPyIFindFallbackOptionClient() if args.quote_fallback == "ifind" else WindPyOptionClient()
+    client = WindPyOptionClient()
     store = OptionMarketDataStore(args.data_root)
     trade_dates = _resolve_trade_dates(client, args.date, args.start_date, args.end_date)
-    failures: list[tuple[str, str, str]] = []
-    try:
-        for trade_date in trade_dates:
-            for product_group in products:
-                existing_path = _normalized_chain_path(store.root, product_group, trade_date)
-                if existing_path.exists() and not args.overwrite:
-                    print(f"SKIP {trade_date} {product_group} path={existing_path}", flush=True)
-                    continue
-                try:
-                    chain = load_normalized_chain(client, product_group, trade_date)
-                    if args.active_only:
-                        chain = _filter_active_chain(chain)
-                    path = store.write_normalized_chain(chain)
-                    print(f"OK {trade_date} {product_group} rows={len(chain)} path={path}", flush=True)
-                except Exception as exc:
-                    message = str(exc)
-                    failures.append((trade_date, product_group, message))
-                    print(f"FAIL {trade_date} {product_group}: {message}", file=sys.stderr, flush=True)
-                    if args.fail_fast:
-                        raise
-    finally:
-        close = getattr(client, "close", None)
-        if callable(close):
-            close()
+    fetch_option_dates(client, store, products, trade_dates, args.overwrite, args.fail_fast, args.active_only)
+
+
+def fetch_option_dates(client, store, products, trade_dates, overwrite=False, fail_fast=False, active_only=False):
+    failures = []
+    for trade_date in trade_dates:
+        for product in products:
+            path = store.chain_path(product, trade_date)
+            if path.exists() and not overwrite:
+                continue
+            try:
+                chain = load_normalized_chain(client, product, trade_date)
+                if active_only:
+                    chain = _filter_active_chain(chain)
+                path = store.write_normalized_chain(chain)
+                print(f"OK {trade_date} {product} rows={len(chain)} path={path}", flush=True)
+            except Exception as exc:
+                if fail_fast:
+                    raise
+                failures.append((trade_date, product, str(exc)))
+                print(f"FAIL {trade_date} {product}: {exc}", file=sys.stderr, flush=True)
     if failures:
         print("\nFailures:", file=sys.stderr, flush=True)
         for trade_date, product_group, message in failures:
@@ -83,17 +75,17 @@ def _resolve_trade_dates(
     if date and (start_date or end_date):
         raise ValueError("Use either --date or --start-date/--end-date, not both.")
     if date:
-        return [pd.Timestamp(date).strftime("%Y-%m-%d")]
+        day = pd.Timestamp(date).normalize()
+        if day not in client.get_trading_calendar(date, date):
+            raise ValueError(f"{date} is not a Wind trading day.")
+        return [day.strftime("%Y-%m-%d")]
     if not start_date:
         raise ValueError("Either --date or --start-date is required.")
-    end = end_date or pd.Timestamp.today().strftime("%Y-%m-%d")
+    end = end_date or default_history_range()[1]
+    if pd.Timestamp(start_date) > pd.Timestamp(end):
+        raise ValueError("--start-date must be on or before --end-date")
     calendar = client.get_trading_calendar(start_date, end)
     return [pd.Timestamp(item).strftime("%Y-%m-%d") for item in calendar]
-
-
-def _normalized_chain_path(root: Path, product_group: str, trade_date: str) -> Path:
-    date_part = pd.Timestamp(trade_date).strftime("%Y-%m-%d")
-    return root / "normalized_chain" / f"product_group={product_group.upper()}" / f"trade_date={date_part}" / "data.parquet"
 
 
 def _filter_active_chain(chain: pd.DataFrame) -> pd.DataFrame:
