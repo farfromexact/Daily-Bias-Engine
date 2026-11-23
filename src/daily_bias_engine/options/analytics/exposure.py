@@ -46,7 +46,7 @@ def compute_contract_exposures(
     if recalculate_greeks or not set(GREEK_COLUMNS).issubset(frame.columns):
         frame = calculate_greeks_frame(frame)
 
-    sign = _position_sign(frame, exposure_mode)
+    sign = position_sign(frame, exposure_mode)
     oi = pd.to_numeric(frame["open_interest"], errors="coerce").fillna(0.0).clip(lower=0.0)
     multiplier = pd.to_numeric(frame["multiplier_or_contract_unit"], errors="coerce").fillna(0.0)
     spot = pd.to_numeric(frame["underlying_price"], errors="coerce").fillna(0.0)
@@ -101,7 +101,7 @@ def aggregate_exposures(exposures: pd.DataFrame) -> dict[str, float]:
     }
 
 
-def _position_sign(frame: pd.DataFrame, mode: ExposureMode) -> pd.Series:
+def position_sign(frame: pd.DataFrame, mode: ExposureMode) -> pd.Series:
     if mode == ExposureMode.UNSIGNED:
         return pd.Series(1.0, index=frame.index)
     if mode == ExposureMode.DEALER_SHORT_OPTIONS:

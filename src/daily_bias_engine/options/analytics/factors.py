@@ -31,7 +31,7 @@ def build_option_factors(
     levels = calculate_key_levels(exposures, mode=mode)
 
     trade_date = pd.Timestamp(chain["trade_date"].iloc[0]).normalize()
-    signal_date = next_trading_day(trade_date)
+    signal_date = pd.Timestamp(chain["next_session"].iloc[0]) if "next_session" in chain else next_trading_day(trade_date)
     product_group = str(chain["product_group"].iloc[0])
 
     call_volume = _sum_by_type(exposures, "call", "volume")
@@ -112,13 +112,14 @@ def _safe_div(numerator: float, denominator: float) -> float:
     return float(numerator / denominator)
 
 
-def _oi_change_by_moneyness(frame: pd.DataFrame) -> dict[str, float]:
-    if "open_interest_change" not in frame.columns:
-        return {"itm": 0.0, "atm": 0.0, "otm": 0.0}
+def _oi_change_by_moneyness(frame: pd.DataFrame) -> dict[str, float | None]:
+    if "open_interest_change" not in frame.columns or frame["open_interest_change"].isna().all():
+        return {"itm": None, "atm": None, "otm": None}
     moneyness = frame["strike"] / frame["underlying_price"] - 1.0
+    moneyness = moneyness.where(frame["option_type"].eq("call"), -moneyness)
     buckets = pd.cut(moneyness, bins=[-np.inf, -0.03, 0.03, np.inf], labels=["itm", "atm", "otm"])
-    changes = frame.assign(bucket=buckets).groupby("bucket", observed=False)["open_interest_change"].sum()
-    return {name: float(changes.get(name, 0.0)) for name in ("itm", "atm", "otm")}
+    changes = frame.assign(bucket=buckets).groupby("bucket", observed=False)["open_interest_change"].sum(min_count=1)
+    return {name: float(value) if pd.notna(value) else None for name, value in changes.items()}
 
 
 def _z_from_history(value: Any, history: pd.Series | None) -> float:

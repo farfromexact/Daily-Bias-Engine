@@ -9,6 +9,7 @@ FACTOR_COLUMNS = [
     "date",
     "signal_date",
     "data_date",
+    "available_date",
     "available_time",
     "factor_name",
     "data_source",
@@ -24,7 +25,7 @@ FACTOR_DATA_SOURCES = {
     "rates_change_5d": "Wind funding rate series: DR007.IB 5-day change",
     "yield_curve_slope": "Wind EDB spread: CGB30Y - CGB10Y using S0059752 and S0059749",
     "etf_flow_proxy": "Market-data ETF daily amount: 510300.SH and 510500.SH",
-    "margin_balance_momentum": "Derived proxy from ETF amount until real margin balance is connected",
+    "margin_balance_momentum": "Wind WSD mrg_long_bal: combined financing balance of 510300.SH and 510500.SH",
     "overseas_market_momentum": "Market-data overseas daily prices: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",
     "overseas_volatility_pressure": "Market-data overseas high-low range proxy: 80% SPX.GI, 10% N225.GI, 10% KS11.GI",
     "ashare_breadth_proxy": "Market-data A-share daily open and close prices: SSE50, CSI300, STAR 50, ChiNext",
@@ -73,6 +74,7 @@ def build_factor_frame(
             "date": signal_index,
             "signal_date": signal_index,
             "data_date": data_dates,
+            "available_date": data_dates,
             "available_time": available_time,
             "factor_name": factor_name,
             "data_source": FACTOR_DATA_SOURCES.get(factor_name, "unspecified"),
@@ -95,12 +97,15 @@ def validate_factor_frame(frame: pd.DataFrame) -> pd.DataFrame:
         clean["signal_date"] = clean["date"]
     if "available_time" not in clean.columns:
         clean["available_time"] = clean["asof_time"]
+    if "available_date" not in clean.columns:
+        clean["available_date"] = clean["data_date"]
     if "data_source" not in clean.columns:
         clean["data_source"] = clean["factor_name"].map(FACTOR_DATA_SOURCES).fillna("unspecified")
     clean = clean[FACTOR_COLUMNS].copy()
     clean["date"] = pd.to_datetime(clean["date"]).dt.normalize()
     clean["signal_date"] = pd.to_datetime(clean["signal_date"]).dt.normalize()
     clean["data_date"] = pd.to_datetime(clean["data_date"]).dt.normalize()
+    clean["available_date"] = pd.to_datetime(clean["available_date"]).dt.normalize()
     clean["raw_value"] = pd.to_numeric(clean["raw_value"], errors="coerce").fillna(0.0)
     clean["zscore_value"] = pd.to_numeric(clean["zscore_value"], errors="coerce").fillna(0.0)
     clean["directional_score"] = (

@@ -14,6 +14,7 @@ from daily_bias_engine.backtest import evaluate_bias_predictions
 from daily_bias_engine.data import MarketDataClient
 from daily_bias_engine.engine import DailyBiasEngine
 from daily_bias_engine.features import calculate_all_features, validate_no_lookahead_contract
+from daily_bias_engine.features.calculators import signal_sessions
 from daily_bias_engine.labeling import label_market_results
 from daily_bias_engine.report import build_daily_report
 
@@ -26,6 +27,7 @@ RAW_TABLES = [
     "overseas_ohlcv",
     "ashare_ohlcv",
 ]
+OPTIONAL_RAW_TABLES = ["trading_calendar", "margin_financing"]
 
 OVERSEAS_INDEX_SYMBOLS = ["SPX.GI", "N225.GI", "KS11.GI"]
 ASHARE_STRUCTURE_SYMBOLS = ["000016.SH", "000300.SH", "000688.SH", "399006.SZ"]
@@ -36,10 +38,13 @@ MARKET_UNIVERSE = {
     "open_interest": ["IF.CFE"],
     "rates": RATE_SERIES,
     "etf_flow": ["510300.SH", "510500.SH"],
+    "margin_financing": ["510300.SH", "510500.SH"],
     "overseas_ohlcv": OVERSEAS_INDEX_SYMBOLS,
     "ashare_ohlcv": ASHARE_STRUCTURE_SYMBOLS,
 }
 RAW_DEDUP_KEYS = {
+    "trading_calendar": ["date"],
+    "margin_financing": ["date", "symbol"],
     "index_ohlcv": ["date", "symbol"],
     "futures_ohlcv": ["date", "symbol"],
     "open_interest": ["date", "symbol"],
@@ -86,9 +91,15 @@ def fetch_raw_inputs(
             raw[table] = client.get_interest_rates(symbols, start_date, end_date)
         elif table == "open_interest":
             raw[table] = client.get_futures_open_interest(symbols, start_date, end_date)
+        elif table == "margin_financing":
+            financing = client.get_margin_financing(symbols, start_date, end_date)
+            if financing is not None:
+                raw[table] = financing
         else:
             raw[table] = client.get_daily_ohlcv(symbols, start_date, end_date)
-    raw["etf_flow"] = _with_margin_balance(raw["etf_flow"])
+    calendar = client.get_trading_calendar(start_date, pd.Timestamp(end_date) + pd.Timedelta(days=21))
+    if calendar is not None:
+        raw["trading_calendar"] = pd.DataFrame({"date": calendar})
     return raw
 
 
@@ -113,14 +124,13 @@ def merge_raw_inputs(
 
     merged: dict[str, pd.DataFrame] = {}
     trim_start = pd.Timestamp(start_date).normalize() if start_date is not None else None
-    for table in RAW_TABLES:
+    tables = RAW_TABLES + [name for name in OPTIONAL_RAW_TABLES if name in base_raw or name in new_raw]
+    for table in tables:
         base = base_raw.get(table, pd.DataFrame()).copy()
         incoming = new_raw.get(table, pd.DataFrame()).copy()
         combined = _merge_raw_table(table, base, incoming)
         if trim_start is not None and "date" in combined.columns and not combined.empty:
             combined = combined[pd.to_datetime(combined["date"], errors="coerce") >= trim_start].copy()
-        if table == "etf_flow" and not combined.empty:
-            combined = _with_margin_balance(combined.drop(columns=["margin_balance"], errors="ignore"))
         merged[table] = combined.reset_index(drop=True)
     return merged
 
@@ -191,6 +201,8 @@ def run_pipeline_from_raw(
     if missing:
         raise ValueError(f"Snapshot raw data is missing tables: {missing}")
 
+    calendar = raw["trading_calendar"]["date"] if "trading_calendar" in raw else None
+    sessions = signal_sessions(raw["index_ohlcv"], calendar)
     factors = calculate_all_features(
         index_ohlcv=raw["index_ohlcv"],
         futures_ohlcv=raw["futures_ohlcv"],
@@ -199,10 +211,12 @@ def run_pipeline_from_raw(
         etf_flow=raw["etf_flow"],
         overseas_ohlcv=raw["overseas_ohlcv"],
         ashare_ohlcv=raw["ashare_ohlcv"],
+        trading_sessions=sessions,
+        margin_financing=raw.get("margin_financing"),
     )
     calendar_config = _load_yaml(config_path / "calendar.yaml")
     decision_time = str(calendar_config.get("calendar", {}).get("signal_time", "09:20:00"))
-    factors = validate_no_lookahead_contract(factors, decision_time=decision_time)
+    factors = validate_no_lookahead_contract(factors, decision_time=decision_time, trading_sessions=sessions)
     engine = DailyBiasEngine.from_yaml(config_path / "factor_weights.yaml", config_path / "thresholds.yaml")
     scores = engine.score(factors)
 
@@ -210,6 +224,16 @@ def run_pipeline_from_raw(
     labels = label_market_results(raw["index_ohlcv"], symbol="000300.SH", **threshold_config.get("labeling", {}))
     metrics = evaluate_bias_predictions(scores, labels, **threshold_config.get("backtest", {}))
     report = build_daily_report(factors=factors, engine_output=scores, labels=labels, metrics=metrics)
+    report["signal_calendar"] = "wind_sse" if calendar is not None else "benchmark_history_weekday_estimate"
+    overseas_dates = raw["overseas_ohlcv"].groupby("symbol")["date"].max()
+    report["overseas_last_close"] = {symbol: str(pd.Timestamp(date).date()) for symbol, date in overseas_dates.items()}
+    latest_overseas = factors.loc[
+        factors["date"].eq(scores["date"].max()) & factors["factor_name"].eq("overseas_market_momentum"), "data_date"
+    ]
+    if not latest_overseas.empty:
+        overseas = raw["overseas_ohlcv"]
+        used = overseas.loc[pd.to_datetime(overseas["date"]).eq(latest_overseas.iloc[0]), "symbol"]
+        report["latest_overseas_components"] = sorted(set(used) & set(OVERSEAS_INDEX_SYMBOLS))
 
     return {
         "factors": factors,
@@ -240,7 +264,8 @@ def save_snapshot(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     raw = result["raw"]
-    for name in RAW_TABLES:
+    raw_tables = RAW_TABLES + [name for name in OPTIONAL_RAW_TABLES if name in raw]
+    for name in raw_tables:
         raw[name].to_parquet(raw_dir / f"{name}.parquet", index=False)
 
     result["factors"].to_parquet(output_dir / "factor_daily.parquet", index=False)
@@ -254,7 +279,7 @@ def save_snapshot(
         "source": source,
         "start_date": start_date,
         "end_date": end_date,
-        "raw_tables": RAW_TABLES,
+        "raw_tables": raw_tables,
         "latest": result["report"].get("latest", {}),
     }
     (snapshot_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
@@ -291,7 +316,7 @@ def list_snapshots(snapshot_root: Path | str, *, source: str | None = None) -> l
                 created_at=str(manifest.get("created_at", "")),
             )
         )
-    return sorted(snapshots, key=lambda item: item.created_at, reverse=True)
+    return sorted(snapshots, key=lambda item: (item.end_date, item.created_at), reverse=True)
 
 
 def load_snapshot_raw(snapshot_dir: Path | str) -> dict[str, pd.DataFrame]:
@@ -302,6 +327,10 @@ def load_snapshot_raw(snapshot_dir: Path | str) -> dict[str, pd.DataFrame]:
         if not path.exists():
             raise FileNotFoundError(f"Snapshot is missing raw table {name}: {path}")
         raw[name] = pd.read_parquet(path)
+    for name in OPTIONAL_RAW_TABLES:
+        path = raw_dir / f"{name}.parquet"
+        if path.exists():
+            raw[name] = pd.read_parquet(path)
     return raw
 
 
@@ -338,15 +367,6 @@ def run_pipeline_from_snapshot(
 ) -> dict[str, Any]:
     raw = load_snapshot_raw(snapshot_dir)
     return run_pipeline_from_raw(raw, config_dir=config_dir, data_mode="snapshot")
-
-
-def _with_margin_balance(frame: pd.DataFrame) -> pd.DataFrame:
-    output = frame.copy()
-    output["date"] = pd.to_datetime(output["date"]).dt.normalize()
-    daily_amount = output.groupby("date")["amount"].transform("mean")
-    rank = output.groupby("symbol").cumcount()
-    output["margin_balance"] = daily_amount * (1.2 + rank * 0.002)
-    return output
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:

@@ -51,11 +51,11 @@ FACTOR_LOGIC = [
     {
         "factor_name": "margin_balance_momentum",
         "group": "ETF 与资金流",
-        "data_source": "当前由真实 Wind ETF 成交额派生演示字段；尚未接真实两融余额。",
-        "raw_formula": "margin_balance 5 日变化率；若无真实字段则由成交额生成演示 proxy",
+        "data_source": "Wind WSD mrg_long_bal，510300.SH 与 510500.SH 的融资余额。",
+        "raw_formula": "两只 ETF 的融资余额合计相对五个上交所交易日前的变化率。",
         "normalization": "20日滚动 z-score；方向分 = clip(zscore, -2, 2) / 2",
         "direction": "融资/杠杆资金回升偏 Risk-On，回落偏 Risk-Off。",
-        "caveat": "这是当前最需要替换的 proxy：快照真实，但该字段不是 Wind 两融真实字段。",
+        "caveat": "T 日余额从 T+2 盘前起使用，预留一个交易日用于披露。任一端缺少任一只 ETF 的余额时跳过该因子。",
     },
     {
         "factor_name": "overseas_market_momentum",

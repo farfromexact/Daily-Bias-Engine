@@ -8,6 +8,7 @@ from daily_bias_engine.features import (
     calculate_rates_and_bond_futures,
 )
 from daily_bias_engine.features.base import FACTOR_COLUMNS
+from daily_bias_engine.features.calculators import calculate_etf_and_margin_flow
 from tests.fixtures import raw_market_inputs
 
 
@@ -20,6 +21,7 @@ def test_all_feature_calculators_emit_required_schema() -> None:
         open_interest=raw["open_interest"],
         rates=raw["rates"],
         etf_flow=raw["etf_flow"],
+        margin_financing=raw["margin_financing"],
         overseas_ohlcv=raw["overseas_ohlcv"],
         ashare_ohlcv=raw["ashare_ohlcv"],
     )
@@ -30,6 +32,20 @@ def test_all_feature_calculators_emit_required_schema() -> None:
     assert pd.api.types.is_datetime64_any_dtype(factors["date"])
     assert pd.api.types.is_datetime64_any_dtype(factors["data_date"])
     assert (factors["data_date"] < factors["date"]).all()
+
+
+def test_financing_requires_both_reported_balances_and_never_reads_legacy_proxy():
+    raw = raw_market_inputs("2024-01-02", "2024-01-31")
+    turnover = raw["etf_flow"].assign(margin_balance=1e15)
+    assert set(calculate_etf_and_margin_flow(turnover).factor_name) == {"etf_flow_proxy"}
+    balances = raw["margin_financing"]
+    gap = pd.Timestamp("2024-01-12")
+    balances = balances[~(balances.date.eq(gap) & balances.symbol.eq("510500.SH"))]
+    observed = calculate_etf_and_margin_flow(turnover, balances)
+    financing = observed[observed.factor_name.eq("margin_balance_momentum")].set_index("data_date")
+    assert gap not in financing.index and gap + 5 * pd.offsets.BDay() not in financing.index
+    total = balances.groupby("date").margin_balance.sum()
+    assert financing.loc["2024-01-23", "raw_value"] == pytest.approx(total["2024-01-23"] / total["2024-01-16"] - 1)
 
 
 def test_overseas_market_uses_configured_country_weights() -> None:

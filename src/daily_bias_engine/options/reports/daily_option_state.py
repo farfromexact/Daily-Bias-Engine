@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from daily_bias_engine.options.analytics.exposure import ExposureMode, aggregate_exposures, compute_contract_exposures
+from daily_bias_engine.options.analytics.exposure import ExposureMode
 from daily_bias_engine.options.analytics.factors import build_option_factors
 from daily_bias_engine.options.analytics.regime_classifier import classify_option_regime
 from daily_bias_engine.options.data.market_data_store import OptionMarketDataStore
@@ -35,7 +35,6 @@ def generate_daily_option_state(
     chain = option_store.read_normalized_chain(product_group.upper(), trade_date)
     factors = build_option_factors(chain, underlying_history=underlying_history, historical_factors=historical_factors, mode=mode)
     regime = classify_option_regime(factors)
-    exposures = aggregate_exposures(compute_contract_exposures(chain, mode=mode))
 
     factors = factors.copy()
     factors["regime"] = regime.regime
@@ -65,10 +64,7 @@ def generate_daily_option_state(
             "max_gamma_strike": _json_float(row.get("max_gamma_strike")),
         },
         "exposures": {
-            "gex_1pct": _json_float(exposures.get("gex_1pct")),
-            "vanna_1vol": _json_float(exposures.get("vanna_1vol")),
-            "charm_1day": _json_float(exposures.get("charm_1day")),
-            "vega_1vol": _json_float(exposures.get("vega_1vol")),
+            key: _json_float(row.get(key)) for key in ("gex_1pct", "vanna_1vol", "charm_1day", "vega_1vol")
         },
         "vol": {
             "iv_30d": _json_float(row.get("iv_30d")),

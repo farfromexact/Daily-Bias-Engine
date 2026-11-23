@@ -19,7 +19,7 @@ Directional score convention:
 
 ## Group Weights
 
-Initial group weights:
+Configured weights are renormalized over the factors available on each signal date.
 
 | Group | Weight |
 | --- | ---: |
@@ -32,8 +32,7 @@ Initial group weights:
 ## As-Of Rule
 
 For a pre-open signal on date `T`, daily close-based factors may only use data
-with `data_date < T`. The default signal date is the next business day after the
-source data date.
+with `data_date < T`. Wind snapshots assign the next SSE session and store the local availability date and time. The ETF financing balance for T enters at T+2. US regular closes use the New York to Shanghai timezone conversion.
 
 Market result labels are generated after the trading session and must never be
 used to create the same date's pre-open signal.
@@ -50,19 +49,11 @@ Initial hard-risk candidates:
 - Equity index futures discount stress.
 - A-share breadth collapse.
 
-## Trend Day Probability
+## Trend strength
 
-Trend day probability is not the same as Risk-On or Risk-Off. It estimates
-market shape, not direction.
-
-Initial rule:
-
-```text
- base probability
-+ absolute bias score
-+ risk flags / signal alignment
-- signal conflict
-```
+The legacy output field `trend_day_probability` holds a rule score. With the default settings it equals
+`clip(35 + 0.55 * abs(total_score) + 3 * min(flag_count, 3), 5, 95)`.
+Backtest Diagnostics reports the realized trend-day frequency for each score band.
 
 The engine also emits `trend_direction_bias`:
 

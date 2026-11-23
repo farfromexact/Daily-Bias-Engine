@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Iterable
 
 import pandas as pd
@@ -9,6 +10,7 @@ import pandas as pd
 LABEL_COLUMNS = {
     "market_return",
     "market_composite_return",
+    "composite_open_to_close_return",
     "intraday_range",
     "open_close_direction",
     "body_ratio",
@@ -45,6 +47,7 @@ def validate_no_lookahead_contract(
     market_results: pd.DataFrame | None = None,
     decision_time: str = "09:20:00",
     overseas_markers: Iterable[str] = ("overseas", "SPX", "N225", "KS11", "A50", "VIX", "CNH", "USD", "US", "JP", "KR"),
+    trading_sessions: pd.DatetimeIndex | None = None,
 ) -> pd.DataFrame:
     """Validate the no-lookahead contract for factor tables.
 
@@ -69,15 +72,31 @@ def validate_no_lookahead_contract(
     clean = factors.copy()
     clean["_signal_date"] = pd.to_datetime(clean[signal_column]).dt.normalize()
     clean["_data_date"] = pd.to_datetime(clean[data_date_column]).dt.normalize()
-    clean["_available_time"] = clean[available_column].map(_parse_time)
+    clean["_available_time"] = clean[available_column].map({t: _parse_time(t) for t in clean[available_column].unique()})
+    if clean[["_signal_date", "_data_date", "_available_time"]].isna().any().any():
+        raise ValueError("Missing signal date, data date or available_time.")
     decision = _parse_time(decision_time)
     clean["_decision_datetime"] = clean["_signal_date"] + decision
-    clean["_available_datetime"] = clean["_data_date"] + clean["_available_time"]
-    clean["_previous_trading_day"] = clean["_signal_date"] - pd.offsets.BDay(1)
-    clean["_is_overseas"] = clean.apply(lambda row: _is_overseas_factor(row, overseas_markers), axis=1)
+    available_date = pd.to_datetime(clean.get("available_date", clean["_data_date"])).dt.normalize()
+    if available_date.isna().any() or (available_date < clean["_data_date"]).any():
+        raise ValueError("Invalid available_date for the observation.")
+    clean["_available_datetime"] = available_date + clean["_available_time"]
+    if trading_sessions is None:
+        clean["_previous_trading_day"] = clean["_signal_date"] - pd.offsets.BDay(1)
+    else:
+        sessions = pd.DatetimeIndex(trading_sessions).normalize().unique().sort_values()
+        if not clean["_signal_date"].isin(sessions).all():
+            raise ValueError("Signal date is outside the trading calendar.")
+        clean["_previous_trading_day"] = clean["_signal_date"].map(pd.Series(sessions, index=sessions).shift())
+    marker_pattern = "|".join(re.escape(marker) for marker in overseas_markers if marker)
+    text = clean.reindex(columns=["factor_name", "data_source"]).fillna("").astype(str)
+    clean["_is_overseas"] = (text["factor_name"] + " " + text["data_source"]).str.contains(
+        rf"(?<![a-z0-9])(?:{marker_pattern})(?![a-z0-9])", case=False
+    ) if marker_pattern else False
 
     domestic_violation = clean.loc[
-        ~clean["_is_overseas"] & (clean["_data_date"] > clean["_previous_trading_day"]),
+        ~clean["_is_overseas"] & ((clean["_data_date"] >= clean["_signal_date"]) |
+                                  (clean["_data_date"] > clean["_previous_trading_day"])),
         [signal_column, data_date_column, "factor_name"] if "factor_name" in clean.columns else [signal_column, data_date_column],
     ]
     if not domestic_violation.empty:
@@ -153,12 +172,3 @@ def _parse_time(value: Any) -> pd.Timedelta:
     if len(parts) == 2:
         text = f"{text}:00"
     return pd.to_timedelta(text)
-
-
-def _is_overseas_factor(row: pd.Series, overseas_markers: Iterable[str]) -> bool:
-    fields = []
-    for column in ("data_source", "factor_name"):
-        if column in row.index and pd.notna(row[column]):
-            fields.append(str(row[column]))
-    text = " ".join(fields).lower()
-    return any(marker.lower() in text for marker in overseas_markers)

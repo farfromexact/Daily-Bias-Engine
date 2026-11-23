@@ -90,20 +90,14 @@ def calculate_rates_and_bond_futures(rates: pd.DataFrame) -> pd.DataFrame:
     if prepared.empty:
         raise ValueError("Rates frame has no weekday observations.")
     pivot = prepared.pivot_table(index="date", columns="series", values="rate", aggfunc="mean")
-    funding_rate = pivot[FUNDING_RATE_SERIES] if FUNDING_RATE_SERIES in pivot.columns else pivot.mean(axis=1)
-    rate_change = funding_rate.diff(5).fillna(0.0)
-    rate_z = rolling_zscore(rate_change)
-
-    frames = [
-        build_factor_frame(
-            rate_change.index,
-            "rates_change_5d",
-            rate_change,
-            rate_z,
-            directional_score(rate_z, polarity=-1.0),
-            _asof_time(rates),
+    frames = []
+    if FUNDING_RATE_SERIES in pivot:
+        rate_change = pivot[FUNDING_RATE_SERIES].dropna().diff(5).fillna(0.0)
+        rate_z = rolling_zscore(rate_change)
+        frames.append(
+            build_factor_frame(rate_change.index, "rates_change_5d", rate_change, rate_z,
+                               directional_score(rate_z, polarity=-1.0), _asof_time(rates))
         )
-    ]
 
     if {YIELD_CURVE_SHORT_SERIES, YIELD_CURVE_LONG_SERIES}.issubset(pivot.columns):
         slope = (pivot[YIELD_CURVE_LONG_SERIES] - pivot[YIELD_CURVE_SHORT_SERIES]).dropna()
@@ -119,51 +113,43 @@ def calculate_rates_and_bond_futures(rates: pd.DataFrame) -> pd.DataFrame:
             )
         )
 
+    if not frames:
+        raise ValueError("Rates contain neither DR007 nor the two government bond yields.")
     return validate_factor_frame(pd.concat(frames, ignore_index=True))
 
 
-def calculate_etf_and_margin_flow(flow_data: pd.DataFrame) -> pd.DataFrame:
-    """Calculate ETF flow and margin-balance proxy factors.
-
-    If ``margin_balance`` is absent, amount momentum is used as a deterministic
-    proxy for demo and test data.
-    """
-
+def calculate_etf_and_margin_flow(
+    flow_data: pd.DataFrame,
+    margin_financing: pd.DataFrame | None = None,
+    trading_sessions: pd.DatetimeIndex | None = None,
+) -> pd.DataFrame:
+    """Keep turnover participation and independently reported ETF financing separate."""
     amount = daily_mean(flow_data, "amount")
     etf_flow = _pct_change(amount, periods=5)
     etf_z = rolling_zscore(etf_flow)
-
-    if "margin_balance" in flow_data.columns:
-        margin_base = daily_mean(flow_data, "margin_balance")
-    else:
-        margin_base = amount.rolling(window=5, min_periods=1).mean()
-    margin_momentum = _pct_change(margin_base, periods=5)
-    margin_z = rolling_zscore(margin_momentum)
-
-    asof = _asof_time(flow_data)
-    return validate_factor_frame(
-        pd.concat(
-            [
-                build_factor_frame(
-                    etf_flow.index,
-                    "etf_flow_proxy",
-                    etf_flow,
-                    etf_z,
-                    directional_score(etf_z, polarity=1.0),
-                    asof,
-                ),
-                build_factor_frame(
-                    margin_momentum.index,
-                    "margin_balance_momentum",
-                    margin_momentum,
-                    margin_z,
-                    directional_score(margin_z, polarity=1.0),
-                    asof,
-                ),
-            ],
-            ignore_index=True,
-        )
+    turnover = build_factor_frame(
+        etf_flow.index, "etf_flow_proxy", etf_flow, etf_z, directional_score(etf_z), _asof_time(flow_data),
     )
+    if margin_financing is None or margin_financing.empty:
+        return turnover
+
+    sessions = trading_sessions if trading_sessions is not None else signal_sessions(flow_data)
+    balances = margin_financing.pivot(index="date", columns="symbol", values="margin_balance")
+    balances.index = pd.DatetimeIndex(balances.index).normalize()
+    balances = balances.reindex(index=sessions, columns=["510300.SH", "510500.SH"])
+    total = balances.sum(axis=1, min_count=2)
+    change = total.pct_change(5, fill_method=None).replace([float("inf"), -float("inf")], float("nan"))
+    z = rolling_zscore(change)
+    # Reserve one full domestic session for publication. At T+2 09:20 the
+    # T balance can be used without assuming a precise provider release time.
+    dates = change.dropna().index.intersection(sessions[:-2])
+    idx = sessions.get_indexer(dates)
+    financing = build_factor_frame(
+        dates, "margin_balance_momentum", change.loc[dates], z.loc[dates], directional_score(z.loc[dates]),
+        "16:30:00", signal_dates=sessions.take(idx + 2),
+    )
+    financing["available_date"] = sessions.take(idx + 1)
+    return pd.concat([turnover, financing], ignore_index=True)
 
 
 def calculate_overseas_market(ohlcv: pd.DataFrame) -> pd.DataFrame:
@@ -192,7 +178,7 @@ def calculate_overseas_market(ohlcv: pd.DataFrame) -> pd.DataFrame:
     volatility_z = rolling_zscore(volatility)
 
     asof = _asof_time(ohlcv)
-    return validate_factor_frame(
+    factors = validate_factor_frame(
         pd.concat(
             [
                 build_factor_frame(
@@ -215,6 +201,13 @@ def calculate_overseas_market(ohlcv: pd.DataFrame) -> pd.DataFrame:
             ignore_index=True,
         )
     )
+
+    includes_us = factors["data_date"].isin(prepared.loc[prepared["symbol"].eq("SPX.GI"), "date"])
+    us_dates = pd.DatetimeIndex(factors.loc[includes_us, "data_date"])
+    us_close = (us_dates + pd.Timedelta(hours=16)).tz_localize("America/New_York").tz_convert("Asia/Shanghai")
+    factors.loc[includes_us, "available_date"] = us_close.tz_localize(None).normalize()
+    factors.loc[includes_us, "available_time"] = us_close.strftime("%H:%M:%S")
+    return factors
 
 
 def _weighted_daily_mean(frame: pd.DataFrame, value_column: str) -> pd.Series:
@@ -271,6 +264,24 @@ def calculate_ashare_market_structure(ohlcv: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def signal_sessions(index_ohlcv: pd.DataFrame, calendar: pd.Series | None = None) -> pd.DatetimeIndex:
+    """Limit signals to benchmark history and one upcoming domestic session."""
+    observed = pd.DatetimeIndex(index_ohlcv["date"]).normalize().unique().sort_values()
+    if observed.empty:
+        raise ValueError("No benchmark trading dates in the snapshot.")
+    last_close = observed[-1]
+    if calendar is None:
+        # Older snapshots only recorded bars. The first future date is an estimate.
+        return observed.union([last_close + pd.offsets.BDay(1)])
+    official = pd.DatetimeIndex(calendar).normalize().dropna().unique().sort_values()
+    future = official[official > last_close]
+    if future.empty:
+        raise ValueError("Wind calendar does not cover the session after the last benchmark bar.")
+    if not observed[observed >= official[0]].isin(official).all():
+        raise ValueError("Benchmark contains a close outside the Wind SSE calendar.")
+    return observed[observed < official[0]].union(official[official <= future[0]]).sort_values()
+
+
 def calculate_all_features(
     index_ohlcv: pd.DataFrame,
     futures_ohlcv: pd.DataFrame,
@@ -279,18 +290,31 @@ def calculate_all_features(
     etf_flow: pd.DataFrame,
     overseas_ohlcv: pd.DataFrame,
     ashare_ohlcv: pd.DataFrame,
+    trading_sessions: pd.DatetimeIndex | None = None,
+    margin_financing: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Run all representative v1 calculators and return one factor table."""
 
-    return validate_factor_frame(
-        pd.concat(
-            [
-                calculate_equity_index_futures_structure(index_ohlcv, futures_ohlcv, open_interest),
-                calculate_rates_and_bond_futures(rates),
-                calculate_etf_and_margin_flow(etf_flow),
-                calculate_overseas_market(overseas_ohlcv),
-                calculate_ashare_market_structure(ashare_ohlcv),
-            ],
-            ignore_index=True,
-        )
+    sessions = trading_sessions if trading_sessions is not None else signal_sessions(index_ohlcv)
+    rates = rates.loc[pd.to_datetime(rates["date"]).dt.normalize().isin(sessions)]
+    factors = pd.concat(
+        [
+            calculate_equity_index_futures_structure(index_ohlcv, futures_ohlcv, open_interest),
+            calculate_rates_and_bond_futures(rates),
+            calculate_etf_and_margin_flow(etf_flow, margin_financing, sessions),
+            calculate_overseas_market(overseas_ohlcv),
+            calculate_ashare_market_structure(ashare_ohlcv),
+        ],
+        ignore_index=True,
     )
+    # Foreign markets can trade through a mainland holiday. Use their latest
+    # available close once, on the first domestic session after that close.
+    positions = sessions.searchsorted(factors["data_date"], side="right")
+    financing = factors["factor_name"].eq("margin_balance_momentum")
+    positions[financing] = sessions.searchsorted(factors.loc[financing, "available_date"], side="right")
+    covered = positions < len(sessions)
+    factors = factors.loc[covered].copy()
+    factors["date"] = sessions.take(positions[covered])
+    factors["signal_date"] = factors["date"]
+    factors = factors.sort_values("data_date").drop_duplicates(["date", "factor_name"], keep="last")
+    return validate_factor_frame(factors)

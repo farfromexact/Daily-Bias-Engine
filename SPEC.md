@@ -26,7 +26,7 @@ It is not a next-bar predictor. It answers:
 - `factor_daily`: normalized factor table with one row per signal date and
   factor.
 - `configs/factor_weights.yaml`: factor weights and score groups.
-- `configs/thresholds.yaml`: bias thresholds, trend probability parameters,
+- `configs/thresholds.yaml`: bias thresholds, trend strength parameters,
   hard-risk flags, labeling thresholds, and backtest thresholds.
 - `configs/instruments.yaml`: instrument universe.
 - `configs/calendar.yaml`: trading calendar and as-of policy.
@@ -46,8 +46,7 @@ Each factor row must include:
 - `directional_score`: clipped to `[-1, 1]`.
 - `asof_time`
 
-For daily close-based data, the default signal date is the next business day
-after `data_date`.
+Signals follow published SSE sessions. US closes use Shanghai availability dates and ETF financing observations enter after one additional SSE session.
 
 ## Engine Output
 
@@ -145,7 +144,7 @@ The dashboard includes additional diagnostics:
 
 - Backtest diagnostics by final bias.
 - Total score bucket diagnostics.
-- Trend probability bucket diagnostics.
+- Trend strength bucket diagnostics.
 - Factor diagnostics covering next market-return correlation, big-loss
   relationship, trend-day relationship, factor quintiles, and recent 60/120 day
   behavior.

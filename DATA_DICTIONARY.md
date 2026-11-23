@@ -57,6 +57,12 @@ Current rate identifiers:
 | `CGB30Y` | Wind EDB `S0059752` | China government bond yield to maturity, 30Y. |
 | `CGB10Y` | Wind EDB `S0059749` | China government bond yield to maturity, 10Y. |
 
+## ETF financing and the trading calendar
+
+`margin_financing.parquet` stores the date, ETF symbol and outstanding financing balance in yuan from Wind WSD `mrg_long_bal`. The factor uses the combined balances of 510300.SH and 510500.SH. The two endpoint observations must be five SSE sessions apart and both ETFs must be present. The first eligible signal for a T observation is T+2.
+
+`trading_calendar.parquet` records Wind SSE trading dates, including upcoming sessions. Historical snapshots without the calendar use observed benchmark dates and mark the next weekday as an estimate.
+
 ## `factor_daily`
 
 | Column | Type | Description |
@@ -64,7 +70,8 @@ Current rate identifiers:
 | `date` | date | Signal date. |
 | `signal_date` | date | Explicit signal-date alias for audit checks. |
 | `data_date` | date | Source data date used by the factor. |
-| `available_time` | string | Time the source data was available for the signal. |
+| `available_date` | date | Shanghai date on which the observation is eligible under the model timing convention. |
+| `available_time` | string | Shanghai time on the availability date. |
 | `factor_name` | string | Stable factor identifier. |
 | `factor_group` | string | Factor group from config; added by engine/report layers. |
 | `data_source` | string | Human-readable source or proxy description. |
@@ -85,7 +92,7 @@ Current rate identifiers:
 | `risk_override` | string | Override type, for example `Hard Risk-Off`; empty when no override. |
 | `override_reason` | string | Human-readable override trigger. |
 | `confidence` | float | Signal confidence proxy from `0` to `100`. |
-| `trend_day_probability` | float | Rule-based trend-day probability from `0` to `100`. |
+| `trend_day_probability` | float | Rule-based trend strength from `0` to `100`. |
 | `trend_direction_bias` | string | `up`, `down`, or `unclear`. |
 | `sub_scores` | object | Group-level weighted scores. |
 | `risk_flags_json` | object | Hard risk flags. |
@@ -121,10 +128,15 @@ Current rate identifiers:
 | --- | --- | --- |
 | `period_start` | date | Evaluation start date. |
 | `period_end` | date | Evaluation end date. |
-| `bias_accuracy` | float | Directional environment hit rate. |
-| `trend_day_precision` | float | Precision of high trend-probability days. |
+| `bias_accuracy` | float | Three-class accuracy using previous close to current close. |
+| `intraday_bias_accuracy` | float | Same classification using open to close. |
+| `neutral_baseline_accuracy`, `intraday_neutral_baseline` | float | Always-Neutral accuracy in the two return windows. |
+| `big_loss_risk_off_recall` | float | Share of realized big-loss days explicitly tagged Risk-Off. |
+| `risk_off_big_loss_precision` | float | Share of Risk-Off calls followed by a big-loss day. |
+| `big_loss_days`, `risk_off_days`, `big_loss_risk_off_days` | integer | Counts for interpreting recall and precision. |
+| `trend_day_precision` | float | Precision of high trend-strength alerts. |
 | `trend_day_recall` | float | Recall of actual trend days. |
-| `big_loss_filter_rate` | float | Big-loss days not labeled Risk-On. |
+| `big_loss_day_filter_rate` | float | Big-loss days not labeled Risk-On. |
 | `false_risk_off_rate` | float | Non-big-loss days labeled Risk-Off. |
 | `notes` | string | Optional evaluation comments. |
 
@@ -134,7 +146,7 @@ Current rate identifiers:
 | --- | --- | --- |
 | `final_bias` | string | Final engine bias used for grouping. |
 | `score_bucket` | string | Total-score bucket when applicable. |
-| `trend_probability_bucket` | string | Trend-probability bucket when applicable. |
+| `trend_probability_bucket` | string | Trend-strength bucket when applicable. |
 | `sample_count` | integer | Number of matched signal/result rows. |
 | `mean_market_return` | float | Mean realized market return. |
 | `median_market_return` | float | Median realized market return. |

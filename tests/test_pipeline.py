@@ -1,6 +1,7 @@
 import pandas as pd
 
 from apps.streamlit_app import CONFIG_DIR
+from daily_bias_engine.data import MarketDataClient
 from daily_bias_engine.pipeline import (
     fetch_raw_inputs,
     default_history_range,
@@ -81,7 +82,7 @@ def test_merge_raw_inputs_dedupes_with_new_values_and_trims_history() -> None:
     assert list(index_close) == [pd.Timestamp("2026-06-02"), pd.Timestamp("2026-06-03")]
     assert index_close[pd.Timestamp("2026-06-02")] == 20.0
     assert rates[pd.Timestamp("2026-06-02")] == 1.85
-    assert merged["etf_flow"]["margin_balance"].tolist() != [999.0, 999.0]
+    assert merged["etf_flow"]["margin_balance"].tolist() == [999.0, 999.0]
     assert latest_raw_data_date(merged) == pd.Timestamp("2026-06-03")
 
 
@@ -146,7 +147,7 @@ def test_wind_snapshot_update_initializes_when_no_base(monkeypatch, tmp_path) ->
     assert calls == [("2023-06-12", "2026-06-12")]
 
 
-class RecordingClient:
+class RecordingClient(MarketDataClient):
     def __init__(self) -> None:
         self.daily_calls: dict[str, list[str]] = {}
         self.rate_calls: list[str] = []
@@ -208,3 +209,37 @@ def test_late_overseas_close_updates_existing_domestic_day(tmp_path, monkeypatch
     path = fetch_wind_snapshot.update_wind_snapshot(tmp_path / "out", end="2024-02-29", base_snapshot=base)
     updated = load_snapshot_raw(path)["overseas_ohlcv"]
     assert (updated.symbol.eq("SPX.GI") & updated.date.eq(pd.Timestamp("2024-02-29"))).sum() == 1
+
+
+def test_holiday_reopen_uses_last_domestic_and_latest_foreign_close(tmp_path):
+    raw = raw_market_inputs("2026-09-21", "2026-10-09")
+    holiday = pd.date_range("2026-10-01", "2026-10-07")
+    for name, frame in raw.items():
+        if name != "overseas_ohlcv":
+            raw[name] = frame.loc[~frame.date.isin(holiday)]
+    sessions = pd.DatetimeIndex(raw["index_ohlcv"].date).union([pd.Timestamp("2026-10-12")])
+    raw["trading_calendar"] = pd.DataFrame({"date": sessions})
+    result = run_pipeline_from_raw(raw, CONFIG_DIR)
+    f = result["factors"]
+    assert not f.date.isin(holiday).any()
+    assert not f.duplicated(["date", "factor_name"]).any()
+    reopen = f[f.date.eq("2026-10-08")].set_index("factor_name")
+    assert reopen.at["equity_index_futures_basis", "data_date"] == pd.Timestamp("2026-09-30")
+    assert reopen.at["overseas_market_momentum", "data_date"] == pd.Timestamp("2026-10-07")
+    assert reopen.at["overseas_market_momentum", "available_date"] == pd.Timestamp("2026-10-08")
+    assert reopen.at["overseas_market_momentum", "available_time"] == "04:00:00"
+    assert reopen.at["margin_balance_momentum", "data_date"] == pd.Timestamp("2026-09-29")
+    assert reopen.at["margin_balance_momentum", "available_date"] == pd.Timestamp("2026-09-30")
+    path = save_snapshot(result, tmp_path, "wind", "2026-09-21", "2026-10-09")
+    pd.testing.assert_frame_equal(load_snapshot_raw(path)["trading_calendar"], raw["trading_calendar"])
+
+
+def test_backfill_creation_order_cannot_replace_newer_market_data(tmp_path):
+    import json
+    from daily_bias_engine.pipeline import list_snapshots
+
+    for created, end in [("20261120", "2026-11-20"), ("20261123", "2026-10-30"), ("20261121", "2026-11-20")]:
+        path = tmp_path / created
+        path.mkdir()
+        (path / "manifest.json").write_text(json.dumps(dict(created_at=created, end_date=end, source="wind")))
+    assert [s.created_at for s in list_snapshots(tmp_path, source="wind")] == ["20261121", "20261120", "20261123"]

@@ -142,6 +142,11 @@ def normalize_option_chain(
     frame["asof_time"] = frame.get("asof_time", "16:30:00")
     frame["source"] = frame.get("source", "normalized")
     clean = frame[NORMALIZED_OPTION_COLUMNS].copy()
+    if trading_calendar is not None:
+        upcoming = pd.DatetimeIndex(trading_calendar).normalize().sort_values()
+        upcoming = upcoming[upcoming > trade_ts]
+        if not upcoming.empty:
+            clean["next_session"] = upcoming[0]
     validate_normalized_chain(clean)
     return clean.sort_values(["product_group", "venue", "expiry_date", "strike", "option_type", "option_code"]).reset_index(drop=True)
 

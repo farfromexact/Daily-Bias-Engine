@@ -1,111 +1,111 @@
 regime_type,regime,factor_name,sample_count,ic,hit_rate,failed_in_regime,effective_in_regime
-trend_regime,downtrend,equity_index_futures_basis,266,-0.018342767995992604,0.41729323308270677,True,False
-trend_regime,downtrend,futures_open_interest_momentum,266,0.029333011265129928,0.575187969924812,False,False
-trend_regime,downtrend,rates_change_5d,266,0.022620466858986863,0.49624060150375937,True,False
-trend_regime,downtrend,yield_curve_slope,266,-0.07589878523451303,0.45864661654135336,True,False
-trend_regime,downtrend,etf_flow_proxy,266,0.12112468175215577,0.556390977443609,False,True
-trend_regime,downtrend,margin_balance_momentum,266,0.12114024662707876,0.556390977443609,False,True
-trend_regime,downtrend,overseas_market_momentum,266,0.09284454493542357,0.5263157894736842,False,True
-trend_regime,downtrend,overseas_volatility_pressure,266,0.034002731084475254,0.4774436090225564,True,False
-trend_regime,downtrend,ashare_breadth_proxy,266,-0.006229940784199519,0.4659090909090909,True,False
-trend_regime,downtrend,ashare_turnover_momentum,266,0.10518207018525208,0.5451127819548872,False,True
-trend_regime,sideways,equity_index_futures_basis,103,0.04488462931184298,0.5346534653465347,False,True
-trend_regime,sideways,futures_open_interest_momentum,103,-0.004615128862090412,0.5816326530612245,True,False
-trend_regime,sideways,rates_change_5d,103,-0.10266973204678052,0.4489795918367347,True,False
-trend_regime,sideways,yield_curve_slope,103,-0.01371261787923042,0.5247524752475248,True,False
-trend_regime,sideways,etf_flow_proxy,103,-0.07645756975644077,0.5306122448979592,True,False
-trend_regime,sideways,margin_balance_momentum,103,-0.07716715862141495,0.5306122448979592,True,False
-trend_regime,sideways,overseas_market_momentum,103,0.05563923074948325,0.5148514851485149,False,False
-trend_regime,sideways,overseas_volatility_pressure,103,0.02071157320529142,0.5346534653465347,False,False
-trend_regime,sideways,ashare_breadth_proxy,103,-0.11245881292846344,0.41,True,False
-trend_regime,sideways,ashare_turnover_momentum,103,-0.1393884062657961,0.45918367346938777,True,False
-trend_regime,uptrend,equity_index_futures_basis,336,0.045614054098534064,0.6071428571428571,False,True
-trend_regime,uptrend,futures_open_interest_momentum,336,0.04485632102913829,0.44345238095238093,True,False
-trend_regime,uptrend,rates_change_5d,336,0.026079026030496822,0.5059523809523809,False,False
-trend_regime,uptrend,yield_curve_slope,336,-0.09070172234921522,0.5119047619047619,True,False
-trend_regime,uptrend,etf_flow_proxy,336,0.019988717989964835,0.4583333333333333,True,False
-trend_regime,uptrend,margin_balance_momentum,336,0.019990319049916404,0.4583333333333333,True,False
-trend_regime,uptrend,overseas_market_momentum,336,0.05256575105930298,0.5148809523809523,False,False
-trend_regime,uptrend,overseas_volatility_pressure,336,-0.008649699599216661,0.5297619047619048,True,False
-trend_regime,uptrend,ashare_breadth_proxy,336,-0.06116677974020841,0.4507462686567164,True,False
-trend_regime,uptrend,ashare_turnover_momentum,336,0.017416685911996094,0.47619047619047616,True,False
-volatility_regime,high realized volatility,equity_index_futures_basis,271,0.08385977919368878,0.5129151291512916,False,False
-volatility_regime,high realized volatility,futures_open_interest_momentum,271,0.062434410744145644,0.5055350553505535,False,False
-volatility_regime,high realized volatility,rates_change_5d,271,-0.014810092134455449,0.4907749077490775,True,False
-volatility_regime,high realized volatility,yield_curve_slope,271,-0.1350618704826318,0.45018450184501846,True,False
-volatility_regime,high realized volatility,etf_flow_proxy,271,0.08243338466776579,0.5018450184501845,False,False
-volatility_regime,high realized volatility,margin_balance_momentum,271,0.08243495021035432,0.5018450184501845,False,False
-volatility_regime,high realized volatility,overseas_market_momentum,271,0.06792238938791942,0.5239852398523985,False,True
-volatility_regime,high realized volatility,overseas_volatility_pressure,271,0.05105579821199456,0.5055350553505535,False,False
-volatility_regime,high realized volatility,ashare_breadth_proxy,271,0.0017325405728566136,0.44814814814814813,True,False
-volatility_regime,high realized volatility,ashare_turnover_momentum,271,0.09605405949097705,0.5055350553505535,False,False
-volatility_regime,low realized volatility,equity_index_futures_basis,181,0.07252438104742924,0.5248618784530387,False,True
-volatility_regime,low realized volatility,futures_open_interest_momentum,181,-0.0339859650747515,0.4696132596685083,True,False
-volatility_regime,low realized volatility,rates_change_5d,181,-0.1213310676058327,0.430939226519337,True,False
-volatility_regime,low realized volatility,yield_curve_slope,181,0.15557725216724172,0.574585635359116,False,True
-volatility_regime,low realized volatility,etf_flow_proxy,181,-0.022646241850976932,0.49171270718232046,True,False
-volatility_regime,low realized volatility,margin_balance_momentum,181,-0.02263392411479315,0.49171270718232046,True,False
-volatility_regime,low realized volatility,overseas_market_momentum,181,0.07483873128977864,0.5193370165745856,False,False
-volatility_regime,low realized volatility,overseas_volatility_pressure,181,0.01234849059733622,0.4861878453038674,True,False
-volatility_regime,low realized volatility,ashare_breadth_proxy,181,-0.037458289774281534,0.45251396648044695,True,False
-volatility_regime,low realized volatility,ashare_turnover_momentum,181,-0.0031390692679828507,0.5138121546961326,True,False
-volatility_regime,normal realized volatility,equity_index_futures_basis,253,0.03122802682928286,0.5378486055776892,False,True
-volatility_regime,normal realized volatility,futures_open_interest_momentum,253,0.07761314518998072,0.5524193548387096,False,True
-volatility_regime,normal realized volatility,rates_change_5d,253,0.09913060152767686,0.5443548387096774,False,True
-volatility_regime,normal realized volatility,yield_curve_slope,253,-0.027338129792365773,0.4820717131474104,True,False
-volatility_regime,normal realized volatility,etf_flow_proxy,253,0.048129863947844416,0.5201612903225806,False,True
-volatility_regime,normal realized volatility,margin_balance_momentum,253,0.04774929891814708,0.5201612903225806,False,True
-volatility_regime,normal realized volatility,overseas_market_momentum,253,0.0523855461642735,0.5139442231075697,False,False
-volatility_regime,normal realized volatility,overseas_volatility_pressure,253,0.09100975932680726,0.5338645418326693,False,True
-volatility_regime,normal realized volatility,ashare_breadth_proxy,253,-0.08479299401065188,0.452,True,False
-volatility_regime,normal realized volatility,ashare_turnover_momentum,253,-0.036877520569628966,0.4838709677419355,True,False
-stress_regime,drawdown > threshold,equity_index_futures_basis,256,-0.04783465291411539,0.4453125,True,False
-stress_regime,drawdown > threshold,futures_open_interest_momentum,256,0.02593313416848546,0.546875,False,False
-stress_regime,drawdown > threshold,rates_change_5d,256,0.01009051102461456,0.4921875,True,False
-stress_regime,drawdown > threshold,yield_curve_slope,256,-0.14521089441764556,0.44921875,True,False
-stress_regime,drawdown > threshold,etf_flow_proxy,256,0.09375322903981688,0.54296875,False,True
-stress_regime,drawdown > threshold,margin_balance_momentum,256,0.09374916798806363,0.54296875,False,True
-stress_regime,drawdown > threshold,overseas_market_momentum,256,0.06940012526380689,0.5234375,False,True
-stress_regime,drawdown > threshold,overseas_volatility_pressure,256,0.08846153075712893,0.4921875,True,False
-stress_regime,drawdown > threshold,ashare_breadth_proxy,256,0.01856893267641464,0.47244094488188976,True,False
-stress_regime,drawdown > threshold,ashare_turnover_momentum,256,0.10975540705179238,0.5390625,False,True
-stress_regime,no stress,equity_index_futures_basis,449,0.12456763104519282,0.5704697986577181,False,True
-stress_regime,no stress,futures_open_interest_momentum,449,0.06751852405706708,0.49324324324324326,True,False
-stress_regime,no stress,rates_change_5d,449,-0.0002719346818877895,0.4954954954954955,True,False
-stress_regime,no stress,yield_curve_slope,449,-0.06853768661589014,0.5190156599552572,True,False
-stress_regime,no stress,etf_flow_proxy,449,0.031955446023610855,0.48423423423423423,True,False
-stress_regime,no stress,margin_balance_momentum,449,0.03177055971708712,0.48423423423423423,True,False
-stress_regime,no stress,overseas_market_momentum,449,0.05881173860736297,0.5167785234899329,False,False
-stress_regime,no stress,overseas_volatility_pressure,449,0.035557251687959236,0.5212527964205816,False,True
-stress_regime,no stress,ashare_breadth_proxy,449,-0.055323628380974835,0.43820224719101125,True,False
-stress_regime,no stress,ashare_turnover_momentum,449,0.0099663250452164,0.4774774774774775,True,False
-overseas_regime,neutral,equity_index_futures_basis,353,0.13854730670115864,0.5698005698005698,False,True
-overseas_regime,neutral,futures_open_interest_momentum,353,0.09400810983444478,0.52,False,False
-overseas_regime,neutral,rates_change_5d,353,-0.03645569163588064,0.49714285714285716,True,False
-overseas_regime,neutral,yield_curve_slope,353,-0.10910499673002866,0.4700854700854701,True,False
-overseas_regime,neutral,etf_flow_proxy,353,0.00894928638914171,0.46285714285714286,True,False
-overseas_regime,neutral,margin_balance_momentum,353,0.008945319052548526,0.46285714285714286,True,False
-overseas_regime,neutral,overseas_market_momentum,353,0.06859786983190554,0.5242165242165242,False,True
-overseas_regime,neutral,overseas_volatility_pressure,353,0.10156229012378698,0.5185185185185185,False,False
-overseas_regime,neutral,ashare_breadth_proxy,353,0.04742730772819518,0.46418338108882523,True,False
-overseas_regime,neutral,ashare_turnover_momentum,353,0.07040456320893315,0.49714285714285716,True,False
-overseas_regime,overseas risk-off,equity_index_futures_basis,194,-0.05017771647287831,0.5,True,False
-overseas_regime,overseas risk-off,futures_open_interest_momentum,194,-0.04298322969232021,0.49740932642487046,True,False
-overseas_regime,overseas risk-off,rates_change_5d,194,-0.04920624058586399,0.45595854922279794,True,False
-overseas_regime,overseas risk-off,yield_curve_slope,194,-0.008273240246144918,0.4896907216494845,True,False
-overseas_regime,overseas risk-off,etf_flow_proxy,194,0.06985983728884344,0.5544041450777202,False,True
-overseas_regime,overseas risk-off,margin_balance_momentum,194,0.06960623651078213,0.5544041450777202,False,True
-overseas_regime,overseas risk-off,overseas_market_momentum,194,0.07390465561126802,0.5154639175257731,False,False
-overseas_regime,overseas risk-off,overseas_volatility_pressure,194,0.0560325019726291,0.5103092783505154,False,False
-overseas_regime,overseas risk-off,ashare_breadth_proxy,194,-0.14540106410490486,0.41968911917098445,True,False
-overseas_regime,overseas risk-off,ashare_turnover_momentum,194,-0.02165743250275072,0.49740932642487046,True,False
-overseas_regime,overseas risk-on,equity_index_futures_basis,158,0.02528020483656935,0.45569620253164556,True,False
-overseas_regime,overseas risk-on,futures_open_interest_momentum,158,0.06435426767278368,0.5159235668789809,False,False
-overseas_regime,overseas risk-on,rates_change_5d,158,0.16823701807138583,0.535031847133758,False,True
-overseas_regime,overseas risk-on,yield_curve_slope,158,-0.022103118690769814,0.5506329113924051,True,False
-overseas_regime,overseas risk-on,etf_flow_proxy,158,0.13906597206397697,0.5414012738853503,False,True
-overseas_regime,overseas risk-on,margin_balance_momentum,158,0.1388694243863427,0.5414012738853503,False,True
-overseas_regime,overseas risk-on,overseas_market_momentum,158,0.12556145304623617,0.5126582278481012,False,False
-overseas_regime,overseas risk-on,overseas_volatility_pressure,158,-0.03526206842964622,0.4936708860759494,True,False
-overseas_regime,overseas risk-on,ashare_breadth_proxy,158,-0.06808449825492496,0.4585987261146497,True,False
-overseas_regime,overseas risk-on,ashare_turnover_momentum,158,0.06796152866574577,0.5095541401273885,False,False
+trend_regime,downtrend,equity_index_futures_basis,270,0.021720290057796396,0.42962962962962964,True,False
+trend_regime,downtrend,futures_open_interest_momentum,270,0.00387147447672105,0.5814814814814815,False,False
+trend_regime,downtrend,rates_change_5d,270,-0.0555587264024525,0.48518518518518516,True,False
+trend_regime,downtrend,yield_curve_slope,270,-0.060567038324248944,0.4666666666666667,True,False
+trend_regime,downtrend,etf_flow_proxy,270,0.07483869735254463,0.5407407407407407,False,True
+trend_regime,downtrend,margin_balance_momentum,270,0.09235041999936958,0.4925925925925926,True,False
+trend_regime,downtrend,overseas_market_momentum,270,0.13570828701500628,0.5148148148148148,False,False
+trend_regime,downtrend,overseas_volatility_pressure,270,0.06133478944029495,0.48148148148148145,True,False
+trend_regime,downtrend,ashare_breadth_proxy,270,-0.006233689167779304,0.47761194029850745,True,False
+trend_regime,downtrend,ashare_turnover_momentum,270,0.06644377033600785,0.5407407407407407,False,True
+trend_regime,sideways,equity_index_futures_basis,107,0.026795123753636695,0.5238095238095238,False,False
+trend_regime,sideways,futures_open_interest_momentum,107,-0.007671678129438271,0.5686274509803921,True,False
+trend_regime,sideways,rates_change_5d,107,-0.037002569778616184,0.4215686274509804,True,False
+trend_regime,sideways,yield_curve_slope,107,0.039726805880138966,0.5047619047619047,False,False
+trend_regime,sideways,etf_flow_proxy,107,-0.11105625565432586,0.5392156862745098,True,False
+trend_regime,sideways,margin_balance_momentum,107,0.006053641771616428,0.5454545454545454,False,False
+trend_regime,sideways,overseas_market_momentum,107,0.03440289540897309,0.5047619047619047,False,False
+trend_regime,sideways,overseas_volatility_pressure,107,0.037561136490142304,0.5142857142857142,False,False
+trend_regime,sideways,ashare_breadth_proxy,107,-0.20198187563180442,0.40384615384615385,True,False
+trend_regime,sideways,ashare_turnover_momentum,107,-0.17878829689717543,0.4411764705882353,True,False
+trend_regime,uptrend,equity_index_futures_basis,348,0.07119876102797548,0.6063218390804598,False,True
+trend_regime,uptrend,futures_open_interest_momentum,348,0.0534166406056928,0.4482758620689655,True,False
+trend_regime,uptrend,rates_change_5d,348,-0.013703347947584639,0.5114942528735632,True,False
+trend_regime,uptrend,yield_curve_slope,348,-0.07021114718116206,0.514367816091954,True,False
+trend_regime,uptrend,etf_flow_proxy,348,0.05990849114164819,0.46839080459770116,True,False
+trend_regime,uptrend,margin_balance_momentum,348,-0.025503867089107988,0.47126436781609193,True,False
+trend_regime,uptrend,overseas_market_momentum,348,0.03841763208523398,0.5114942528735632,False,False
+trend_regime,uptrend,overseas_volatility_pressure,348,-0.013576717710653611,0.5316091954022989,True,False
+trend_regime,uptrend,ashare_breadth_proxy,348,-0.04725747284375186,0.44668587896253603,True,False
+trend_regime,uptrend,ashare_turnover_momentum,348,0.0608235712240754,0.48563218390804597,True,False
+volatility_regime,high realized volatility,equity_index_futures_basis,272,0.12642601090777417,0.5183823529411765,False,False
+volatility_regime,high realized volatility,futures_open_interest_momentum,272,0.07942680830443759,0.5147058823529411,False,False
+volatility_regime,high realized volatility,rates_change_5d,272,-0.07171607087513511,0.48161764705882354,True,False
+volatility_regime,high realized volatility,yield_curve_slope,272,-0.07844431741135124,0.46691176470588236,True,False
+volatility_regime,high realized volatility,etf_flow_proxy,272,0.06680323516460478,0.49264705882352944,True,False
+volatility_regime,high realized volatility,margin_balance_momentum,272,-0.06866496581789867,0.46691176470588236,True,False
+volatility_regime,high realized volatility,overseas_market_momentum,272,0.0767454763852651,0.5257352941176471,False,True
+volatility_regime,high realized volatility,overseas_volatility_pressure,272,0.07587352476152463,0.49264705882352944,True,False
+volatility_regime,high realized volatility,ashare_breadth_proxy,272,-0.003713424032270334,0.44649446494464945,True,False
+volatility_regime,high realized volatility,ashare_turnover_momentum,272,0.10073752191972955,0.5,True,False
+volatility_regime,low realized volatility,equity_index_futures_basis,190,0.05624666658972045,0.5421052631578948,False,True
+volatility_regime,low realized volatility,futures_open_interest_momentum,190,0.021891785777144877,0.46842105263157896,True,False
+volatility_regime,low realized volatility,rates_change_5d,190,-0.08348680934897316,0.4421052631578947,True,False
+volatility_regime,low realized volatility,yield_curve_slope,190,0.11895066171615215,0.5736842105263158,False,True
+volatility_regime,low realized volatility,etf_flow_proxy,190,0.03244140341345273,0.49473684210526314,True,False
+volatility_regime,low realized volatility,margin_balance_momentum,190,0.08199050710289994,0.5105263157894737,False,False
+volatility_regime,low realized volatility,overseas_market_momentum,190,0.08303156194913848,0.5052631578947369,False,False
+volatility_regime,low realized volatility,overseas_volatility_pressure,190,0.09957422197715167,0.5210526315789473,False,True
+volatility_regime,low realized volatility,ashare_breadth_proxy,190,-0.058776146942925406,0.44148936170212766,True,False
+volatility_regime,low realized volatility,ashare_turnover_momentum,190,0.01825653718611529,0.5052631578947369,False,False
+volatility_regime,normal realized volatility,equity_index_futures_basis,263,0.019303743038562284,0.5287356321839081,False,False
+volatility_regime,normal realized volatility,futures_open_interest_momentum,263,0.0037201219352844435,0.5503875968992248,False,False
+volatility_regime,normal realized volatility,rates_change_5d,263,0.034205492340861024,0.5310077519379846,False,True
+volatility_regime,normal realized volatility,yield_curve_slope,263,-0.004298556698788086,0.4674329501915709,True,False
+volatility_regime,normal realized volatility,etf_flow_proxy,263,0.05045685011329659,0.5271317829457365,False,True
+volatility_regime,normal realized volatility,margin_balance_momentum,263,0.08881380551460655,0.4980392156862745,True,False
+volatility_regime,normal realized volatility,overseas_market_momentum,263,0.06714115174324117,0.5019157088122606,False,False
+volatility_regime,normal realized volatility,overseas_volatility_pressure,263,0.0341608271337603,0.5210727969348659,False,True
+volatility_regime,normal realized volatility,ashare_breadth_proxy,263,-0.03923520362745179,0.4653846153846154,True,False
+volatility_regime,normal realized volatility,ashare_turnover_momentum,263,0.00033297904679183393,0.49612403100775193,True,False
+stress_regime,drawdown > threshold,equity_index_futures_basis,306,-0.008087074739659991,0.4542483660130719,True,False
+stress_regime,drawdown > threshold,futures_open_interest_momentum,306,0.010234059221364078,0.5522875816993464,False,False
+stress_regime,drawdown > threshold,rates_change_5d,306,-0.08169363034645283,0.4803921568627451,True,False
+stress_regime,drawdown > threshold,yield_curve_slope,306,-0.07041211458321096,0.48366013071895425,True,False
+stress_regime,drawdown > threshold,etf_flow_proxy,306,0.05143973988624158,0.5294117647058824,False,True
+stress_regime,drawdown > threshold,margin_balance_momentum,306,-0.009321655528838704,0.4869281045751634,True,False
+stress_regime,drawdown > threshold,overseas_market_momentum,306,0.07136554100348051,0.5065359477124183,False,False
+stress_regime,drawdown > threshold,overseas_volatility_pressure,306,0.09368800769018927,0.5,True,False
+stress_regime,drawdown > threshold,ashare_breadth_proxy,306,-0.0019742131785506,0.4752475247524752,True,False
+stress_regime,drawdown > threshold,ashare_turnover_momentum,306,0.04953930134247335,0.5130718954248366,False,False
+stress_regime,no stress,equity_index_futures_basis,419,0.14104160884375053,0.5827338129496403,False,True
+stress_regime,no stress,futures_open_interest_momentum,419,0.08895959403025329,0.48792270531400966,True,False
+stress_regime,no stress,rates_change_5d,419,0.0022554982077081748,0.49516908212560384,True,False
+stress_regime,no stress,yield_curve_slope,419,-0.055129605855842166,0.5035971223021583,True,False
+stress_regime,no stress,etf_flow_proxy,419,0.05507173814076811,0.48792270531400966,True,False
+stress_regime,no stress,margin_balance_momentum,419,-0.008572038377103628,0.49148418491484186,True,False
+stress_regime,no stress,overseas_market_momentum,419,0.06617730143626645,0.5155875299760192,False,False
+stress_regime,no stress,overseas_volatility_pressure,419,0.04405397699404363,0.5179856115107914,False,False
+stress_regime,no stress,ashare_breadth_proxy,419,-0.04386816434493148,0.43509615384615385,True,False
+stress_regime,no stress,ashare_turnover_momentum,419,0.05546398563032857,0.49033816425120774,True,False
+overseas_regime,neutral,equity_index_futures_basis,358,0.13671133943213545,0.5617977528089888,False,True
+overseas_regime,neutral,futures_open_interest_momentum,358,0.07437742674312006,0.5154929577464789,False,False
+overseas_regime,neutral,rates_change_5d,358,-0.031482975284765055,0.49014084507042255,True,False
+overseas_regime,neutral,yield_curve_slope,358,-0.0950816220659822,0.4747191011235955,True,False
+overseas_regime,neutral,etf_flow_proxy,358,0.0011506245401805963,0.4647887323943662,True,False
+overseas_regime,neutral,margin_balance_momentum,358,-0.005837502077317033,0.49577464788732395,True,False
+overseas_regime,neutral,overseas_market_momentum,358,0.05012689032325723,0.5252808988764045,False,True
+overseas_regime,neutral,overseas_volatility_pressure,358,0.08582449439183683,0.5084269662921348,False,False
+overseas_regime,neutral,ashare_breadth_proxy,358,0.07384264936693133,0.4745762711864407,True,False
+overseas_regime,neutral,ashare_turnover_momentum,358,0.045645479131311215,0.49295774647887325,True,False
+overseas_regime,overseas risk-off,equity_index_futures_basis,202,-0.015409062141244488,0.5099009900990099,True,False
+overseas_regime,overseas risk-off,futures_open_interest_momentum,202,-0.012069866233078388,0.5074626865671642,True,False
+overseas_regime,overseas risk-off,rates_change_5d,202,-0.14647695060910418,0.4626865671641791,True,False
+overseas_regime,overseas risk-off,yield_curve_slope,202,0.0372228397244885,0.4801980198019802,True,False
+overseas_regime,overseas risk-off,etf_flow_proxy,202,0.05599409302604085,0.5522388059701493,False,True
+overseas_regime,overseas risk-off,margin_balance_momentum,202,-0.04907338326431126,0.435,True,False
+overseas_regime,overseas risk-off,overseas_market_momentum,202,0.13309016835833185,0.504950495049505,False,False
+overseas_regime,overseas risk-off,overseas_volatility_pressure,202,0.14620529133294527,0.5396039603960396,False,True
+overseas_regime,overseas risk-off,ashare_breadth_proxy,202,-0.12910191346857242,0.4129353233830846,True,False
+overseas_regime,overseas risk-off,ashare_turnover_momentum,202,-0.000206277871908599,0.4975124378109453,True,False
+overseas_regime,overseas risk-on,equity_index_futures_basis,165,0.09148120650109598,0.47878787878787876,True,False
+overseas_regime,overseas risk-on,futures_open_interest_momentum,165,0.06433531953152667,0.524390243902439,False,True
+overseas_regime,overseas risk-on,rates_change_5d,165,0.10527114599873297,0.5182926829268293,False,False
+overseas_regime,overseas risk-on,yield_curve_slope,165,0.005529105763237617,0.5575757575757576,False,False
+overseas_regime,overseas risk-on,etf_flow_proxy,165,0.17094105782098482,0.5365853658536586,False,True
+overseas_regime,overseas risk-on,margin_balance_momentum,165,0.04909683003887755,0.5432098765432098,False,True
+overseas_regime,overseas risk-on,overseas_market_momentum,165,0.080826162351331,0.4909090909090909,True,False
+overseas_regime,overseas risk-on,overseas_volatility_pressure,165,-0.07676755244632938,0.47878787878787876,True,False
+overseas_regime,overseas risk-on,ashare_breadth_proxy,165,-0.1007875068416276,0.45121951219512196,True,False
+overseas_regime,overseas risk-on,ashare_turnover_momentum,165,0.16457814976780166,0.5182926829268293,False,False

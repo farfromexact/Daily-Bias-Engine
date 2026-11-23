@@ -1,0 +1,18 @@
+{
+  "observations": 725,
+  "bias_accuracy": 0.3310344827586207,
+  "neutral_baseline_accuracy": 0.28551724137931034,
+  "intraday_observations": 725,
+  "intraday_bias_accuracy": 0.3103448275862069,
+  "intraday_neutral_baseline": 0.2882758620689655,
+  "directional_call_coverage": 0.33241379310344826,
+  "big_loss_days": 45,
+  "risk_off_days": 176,
+  "big_loss_risk_off_days": 11,
+  "big_loss_risk_off_recall": 0.24444444444444444,
+  "risk_off_big_loss_precision": 0.0625,
+  "trend_day_precision": 0.23529411764705882,
+  "trend_day_recall": 0.06666666666666667,
+  "big_loss_day_filter_rate": 0.8888888888888888,
+  "false_risk_off_rate": 0.2426470588235294
+}

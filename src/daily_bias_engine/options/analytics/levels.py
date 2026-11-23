@@ -7,8 +7,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from daily_bias_engine.options.analytics.exposure import ExposureMode, compute_contract_exposures
-from daily_bias_engine.options.analytics.greeks import GREEK_COLUMNS
+from daily_bias_engine.options.analytics.exposure import ExposureMode, compute_contract_exposures, normalize_exposure_mode, position_sign
+from daily_bias_engine.options.analytics.pricing import SQRT_2PI
 
 
 def simulate_spot_grid_gamma(
@@ -24,16 +24,32 @@ def simulate_spot_grid_gamma(
         return pd.DataFrame(columns=["spot", "gamma_exposure_1pct"])
     spot_now = _reference_spot(chain)
     spots = np.linspace(spot_now * (1.0 - pct_width), spot_now * (1.0 + pct_width), steps)
-    base_underlying = pd.to_numeric(chain["underlying_price"], errors="coerce")
-    base_reference = _reference_level_series(chain).replace(0.0, np.nan)
-    rows = []
+    t = chain["year_fraction"].to_numpy(dtype=float)
+    vol = chain["implied_vol"].to_numpy(dtype=float)
+    live = (t > 0) & (vol > 0) & np.isfinite(vol)
+    contracts = chain.loc[live]
+    t, vol = t[live], vol[live]
+    strikes = contracts["strike"].to_numpy(dtype=float)
+    if np.any(~np.isfinite(strikes) | (strikes <= 0)):
+        raise ValueError("strike must be positive.")
+    reference = _reference_level_series(contracts).replace(0.0, np.nan)
+    scales = contracts["underlying_price"].div(reference).fillna(1.0).to_numpy(dtype=float)
+    rates = contracts["risk_free_rate"].to_numpy(dtype=float)
+    dividends = contracts.get("dividend_yield", pd.Series(0.0, index=contracts.index)).to_numpy(dtype=float)
+    sigma_root_t = vol * np.sqrt(t)
+    drift = (rates - dividends + 0.5 * vol**2) * t
+    oi = contracts["open_interest"].fillna(0.0).clip(lower=0.0)
+    size = (position_sign(contracts, normalize_exposure_mode(mode)) * oi * contracts["multiplier_or_contract_unit"]).to_numpy(dtype=float)
+    # BS gamma times signed contract size and 1% of spot squared.
+    coefficient = size * 0.01 * np.exp(-dividends * t) / (SQRT_2PI * sigma_root_t)
+    gamma_totals = []
     for spot in spots:
-        scenario = chain.drop(columns=GREEK_COLUMNS, errors="ignore").copy()
-        scenario["underlying_price"] = (base_underlying * (float(spot) / base_reference)).fillna(float(spot))
-        scenario["reference_index_level"] = float(spot)
-        exposures = compute_contract_exposures(scenario, mode=mode, recalculate_greeks=True)
-        rows.append({"spot": float(spot), "gamma_exposure_1pct": float(exposures["gamma_exposure_1pct"].sum())})
-    return pd.DataFrame(rows)
+        underlying = spot * scales
+        if np.any(~np.isfinite(underlying) | (underlying <= 0)):
+            raise ValueError("spot must be positive.")
+        d1 = (np.log(underlying / strikes) + drift) / sigma_root_t
+        gamma_totals.append(np.nansum(coefficient * underlying * np.exp(-0.5 * d1**2)))
+    return pd.DataFrame({"spot": spots, "gamma_exposure_1pct": gamma_totals})
 
 
 def zero_gamma_level(grid: pd.DataFrame) -> float | None:
@@ -42,7 +58,7 @@ def zero_gamma_level(grid: pd.DataFrame) -> float | None:
     values = pd.to_numeric(grid["gamma_exposure_1pct"], errors="coerce")
     spots = pd.to_numeric(grid["spot"], errors="coerce")
     clean = pd.DataFrame({"spot": spots, "gamma": values}).dropna().sort_values("spot")
-    if clean.empty:
+    if clean.empty or clean["gamma"].abs().le(1e-9).all():
         return None
     exact = clean.loc[clean["gamma"].abs() <= 1e-9]
     if not exact.empty:

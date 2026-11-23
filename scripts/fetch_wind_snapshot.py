@@ -22,8 +22,10 @@ from daily_bias_engine.pipeline import (
 def _last_observations(raw: dict[str, pd.DataFrame]) -> dict[tuple[str, str], pd.Timestamp]:
     dates = {}
     for table, names in MARKET_UNIVERSE.items():
+        if table not in raw:
+            continue
         key = "series" if table == "rates" else "symbol"
-        value = {"rates": "rate", "open_interest": "open_interest"}.get(table, "close")
+        value = {"rates": "rate", "open_interest": "open_interest", "margin_financing": "margin_balance"}.get(table, "close")
         frame = raw[table].dropna(subset=[value])
         newest = frame.groupby(key)["date"].max()
         for name in names:

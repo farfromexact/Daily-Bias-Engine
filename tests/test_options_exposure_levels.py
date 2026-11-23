@@ -36,6 +36,20 @@ def test_zero_gamma_on_controlled_calibrated_chain() -> None:
     assert 95.0 < level < 105.0
 
 
+@pytest.mark.parametrize("mode", list(ExposureMode))
+def test_gamma_grid_matches_contract_repricing_for_mixed_underlyings(mode):
+    index = _bs_contract("index", strike=100, calibrated_sign=-0.6)
+    etf = dict(index, option_code="etf", option_type="put", underlying_price=4.0, strike=4.1,
+               calibrated_sign=1.0, multiplier_or_contract_unit=10000, dividend_yield=0.013)
+    chain = pd.DataFrame([index, etf, dict(etf, year_fraction=0), dict(index, implied_vol=float("nan"))])
+    grid = simulate_spot_grid_gamma(chain, mode, steps=5)
+    for row in grid.itertuples():
+        scenario = chain.assign(underlying_price=chain.underlying_price * row.spot / chain.reference_index_level)
+        expected = compute_contract_exposures(scenario, mode, recalculate_greeks=True).gamma_exposure_1pct.sum()
+        assert row.gamma_exposure_1pct == pytest.approx(expected, rel=1e-12)
+    assert zero_gamma_level(grid.assign(gamma_exposure_1pct=0.0)) is None
+
+
 def _known_greek_contract(option_code: str, spot: float, multiplier: float, gamma: float, option_type: str) -> dict[str, object]:
     return {
         "option_code": option_code,

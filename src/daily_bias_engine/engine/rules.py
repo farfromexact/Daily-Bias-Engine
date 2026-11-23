@@ -57,16 +57,19 @@ class DailyBiasEngine:
 
     def score(self, factor_daily: pd.DataFrame) -> pd.DataFrame:
         factors = validate_factor_frame(factor_daily)
+        factors = factors[factors["factor_name"].isin(name for name, weight in self.weights.items() if weight != 0)]
+        if factors.empty:
+            raise ValueError("No configured factors with a nonzero weight are available to score.")
         rows: list[dict[str, Any]] = []
         for date, daily in factors.groupby("date", sort=True):
             scored = daily.copy()
-            scored["weight"] = scored["factor_name"].map(self.weights).fillna(1.0).astype(float)
+            scored["weight"] = scored["factor_name"].map(self.weights).astype(float)
             scored["group"] = scored["factor_name"].map(self.groups).fillna("ungrouped")
             scored["factor_score"] = scored["directional_score"] * 100.0
-            scored["contribution"] = scored["factor_score"] * scored["weight"]
-
             weight_sum = scored["weight"].abs().sum()
-            total_score = 0.0 if weight_sum == 0 else scored["contribution"].sum() / weight_sum
+            scored["weight"] /= weight_sum
+            scored["contribution"] = scored["factor_score"] * scored["weight"]
+            total_score = scored["contribution"].sum()
             total_score = float(np.clip(total_score, -100.0, 100.0))
             risk_flags = self._risk_flags(scored)
             raw_label = self._raw_label(total_score)
@@ -191,7 +194,9 @@ class DailyBiasEngine:
 
     @staticmethod
     def _drivers(scored: pd.DataFrame, ascending: bool) -> list[dict[str, Any]]:
-        sorted_frame = scored.sort_values("contribution", ascending=ascending).head(3)
+        contributions = scored["contribution"]
+        same_sign = contributions.lt(0) if ascending else contributions.gt(0)
+        sorted_frame = scored.loc[same_sign].sort_values("contribution", ascending=ascending).head(3)
         drivers: list[dict[str, Any]] = []
         for _, row in sorted_frame.iterrows():
             drivers.append(
@@ -236,6 +241,7 @@ class DailyBiasEngine:
                     "weight": float(row["weight"]),
                     "contribution": float(row["contribution"]),
                     "data_date": pd.Timestamp(row["data_date"]).strftime("%Y-%m-%d"),
+                    "available_date": pd.Timestamp(row["available_date"]).strftime("%Y-%m-%d"),
                     "available_time": str(row.get("available_time", row.get("asof_time", ""))),
                 }
             )

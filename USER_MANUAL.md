@@ -30,7 +30,7 @@ Daily Bias Engine 是一个盘前市场环境过滤器，不是自动交易系�
 - ETF 和资金流 proxy。
 - 海外隔夜市场。
 - A 股市场结构 proxy。
-- 总分、风向标签、趋势日概率、风险覆盖。
+- 总分、风向标签、趋势强度分、风险覆盖。
 
 ### 期权状态模块
 
@@ -268,7 +268,7 @@ python -m daily_bias_engine.weight_optimizer --snapshot-root data\snapshots --co
 - `current_weights`、`optimized_return_weights`、`optimized_risk_weights`、`constrained_blended_weights`。
 - `raw_blended_weights` 到 `constrained_blended_weights` 的约束投影检查。
 - return/risk score 分桶、regime diagnostics、leakage checks 和 permutation sanity check。
-- 约束检查结果，包括单因子、单模块、利率、ETF flow + margin proxy、`yield_curve_slope` 等限制。
+- 约束检查结果，包括单因子、单模块、利率、ETF 成交额与融资余额、`yield_curve_slope` 等限制。
 
 这些输出用于人工审阅，不会被 Streamlit 或引擎自动加载。
 
@@ -281,7 +281,7 @@ python -m daily_bias_engine.weight_optimizer --snapshot-root data\snapshots --co
 - 信号日期：当前正在查看哪一天的盘前信号。
 - 市场风向：`Risk-On`、`Neutral` 或 `Risk-Off`。
 - 总分：`-100` 到 `+100`。
-- 趋势日概率：系统认为当天可能走出趋势日的概率。
+- 趋势强度分由总分绝对值和硬风险标记计算，范围为 0 到 100。各档位的历史趋势日发生率见 Backtest Diagnostics。
 - 趋势方向：`up`、`down` 或 `unclear`。
 - 正向驱动和负向驱动：解释当前分数主要由哪些因子贡献。
 - 风险覆盖：极端风险因子触发时，会覆盖普通加权总分。
@@ -300,11 +300,11 @@ python -m daily_bias_engine.weight_optimizer --snapshot-root data\snapshots --co
 
 ### Backtest
 
-展示历史信号和事后市场结果的整体评估。
+并列展示收盘到收盘和开盘到收盘两种三分类命中率，对照每日给 Neutral 的基准。中性区间取配置中的绝对收益阈值，默认 0.3%。大亏日明确防守率只计盘前为 Risk-Off 的日期，旁边给出分子、分母和误报率。
 
 ### Backtest Diagnostics
 
-按风向、分数区间、趋势概率区间拆开看历史表现。
+按风向、分数区间、趋势强度区间拆开看历史表现。
 
 ### Factor Diagnostics
 
@@ -347,7 +347,7 @@ score <= -30 => Risk-Off
 - 负贡献支持 Risk-Off。
 - 接近 0 表示信息不足或互相抵消。
 
-趋势日概率不是方向预测。它回答的是“当天是否更可能走出趋势结构”，而不是“涨还是跌”。趋势方向由 `trend_direction_bias` 单独表示。
+趋势强度分反映规则强度。趋势方向由 `trend_direction_bias` 单独表示。
 
 ## 11. 当前主因子清单
 
@@ -358,7 +358,7 @@ score <= -30 => Risk-Off
 | `rates_change_5d` | 利率 | `DR007.IB` 5 日变化 | 利率上行偏 Risk-Off |
 | `yield_curve_slope` | 利率 | Wind EDB 30Y 国债收益率 - 10Y 国债收益率 | 曲线变陡暂偏 Risk-On |
 | `etf_flow_proxy` | ETF/资金流 | 510300、510500 成交额 5 日变化 | 成交额回升偏 Risk-On |
-| `margin_balance_momentum` | ETF/资金流 | 当前由 ETF 成交额派生的两融 proxy | proxy 回升偏 Risk-On |
+| `margin_balance_momentum` | ETF/资金流 | 两只 ETF 的 Wind 融资余额合计相对五个交易日前的变化率 | 融资余额回升偏 Risk-On |
 | `overseas_market_momentum` | 海外隔夜 | 美国、日本、韩国指数的加权单日涨跌 | 海外上涨偏 Risk-On |
 | `overseas_volatility_pressure` | 海外隔夜 | 美国、日本、韩国指数加权日内振幅 | 波动放大偏 Risk-Off |
 | `ashare_breadth_proxy` | A 股结构 | 上证50、沪深300、科创50、创业板指上涨比例 proxy | 扩散改善偏 Risk-On |
@@ -370,7 +370,7 @@ score <= -30 => Risk-Off
 - 海外隔夜当前使用 `SPX.GI`、`N225.GI`、`KS11.GI`，权重分别为美国 80%、日本 10%、韩国 10%；如果某个市场当日缺数据，则按当日可用指数的权重重新归一。
 - A 股市场宽度当前使用 `000016.SH`、`000300.SH`、`000688.SH`、`399006.SZ`，对应上证50、沪深300、科创50、创业板指。
 - 期限利差使用 `S0059752`（中债国债到期收益率:30年）减 `S0059749`（中债国债到期收益率:10年）；取不到真实 EDB 时不会伪造。
-- `margin_balance_momentum` 当前还不是两融真实余额，是用 ETF 成交额派生的 proxy。
+- `margin_balance_momentum` 使用 510300.SH 和 510500.SH 的 Wind WSD `mrg_long_bal`。T 日余额从 T+2 盘前起使用，数据日期和模型可用日期分别展示。
 
 ## 12. 期权状态怎么理解
 
@@ -501,8 +501,30 @@ git status --short
 - 主因子仍是 v1 代表性口径，部分字段是 proxy。
 - `yield_curve_slope` 依赖 Wind EDB 的 30Y/10Y 国债收益率；取不到时不会伪造。
 - ETF 流入流出还没有接入真实份额或申赎数据。
-- 两融余额仍是 proxy。
+- 融资余额只覆盖两只样本 ETF。
 - A 股市场宽度暂用指数样本替代全市场上涨家数。
 - 期权层没有真实交易商仓位，只能用 OI 和希腊值推导风险结构。
 
 使用时应把它看作盘前风险环境仪表盘，而不是单独的买卖信号。
+
+## 17. 2026-11-23 系统复核与改进顺序
+
+本次从同一段沪深 300 行情重算了 2023-11-23 至 2026-11-23 的信号。726 个行情日对应 725 个可复盘信号。首日用于生成次日信号，最后一个信号面向 11 月 24 日，等待收盘后评价。
+
+| 核对项 | 结果 |
+| --- | --- |
+| 日期对齐 | 使用 Wind 上交所日历后，可复盘样本从 705 天增至 725 天。2026 年国庆后首个信号采用 9 月 30 日境内收盘和 10 月 7 日海外收盘。 |
+| ETF 资金参与 | 换用两只 ETF 分别披露的融资余额后，融资与成交额两个方向分的同期相关系数从 0.999998 降至 0.230。 |
+| 三分类命中 | 收盘到收盘为 33.1%，始终中性的基准为 28.6%。开盘到收盘为 31.0%，相应基准为 28.8%。 |
+| 大亏日预警 | 45 个大亏日中，40 天给出中性或防守，11 天明确给出防守。全样本有 176 次防守提示，随后大亏的比例为 6.25%，全部日期的大亏比例为 6.21%。 |
+| 候选权重 | 滚动样本外验证共 29 折、599 天。候选收益分数的方向命中为 304/599，95% 区间为 46.8% 至 54.7%。生产权重继续沿用原配置。 |
+| 看板响应 | 同一台 Mac 使用 Streamlit AppTest 测量，总览首次加载从 6.04 秒降至 0.66 秒。首次渲染的表格从 41 张降为 4 张。 |
+| 美元流动性 | 净流动性统一使用百万美元。历史净流动性序列截至 2026-06-29，标普和纳斯达克对照图使用 Wind 历史收盘价。 |
+
+美联储资产和 TGA 的原始单位是百万美元，隔夜逆回购的原始单位是十亿美元，计算时将后者乘以 1,000。[WALCL](https://fred.stlouisfed.org/series/WALCL) · [WTREGEN](https://fred.stlouisfed.org/series/WTREGEN) · [RRPONTSYD](https://fred.stlouisfed.org/series/RRPONTSYD)
+
+### 接下来优先验证的三件事
+
+1. **留存交易日 09:20 的实际判断。** 保存首次发布的信号、生成时间、快照编号、各因子实际参与权重和缺失市场。盘后重算结果单独对照。晚间预览的海外市场覆盖可能变化，2026-11-23 晚的海外因子只用到了韩国当日收盘。
+2. **用新的交易日复核硬风险规则。** 对同一批日期并行记录当前规则、关闭单项硬风险覆盖、始终中性这三种结果。按开盘到收盘收益、明确预警率、误报率和样本数比较，同时报告换手及成本假设。现有候选权重继续作影子对照。
+3. **优先扩充独立数据。** 为 ETF 加入份额和净申赎，为市场宽度加入上涨家数，为期权连续保存三品种日终链。当前 Wind 期权链仅覆盖 11 月 20 日和 23 日，年度 IV 分位需要更长历史。

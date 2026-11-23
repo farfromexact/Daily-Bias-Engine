@@ -6,13 +6,15 @@ import pandas as pd
 
 def raw_market_inputs(start_date: str = "2024-01-01", end_date: str = "2024-03-31") -> dict[str, pd.DataFrame]:
     etf_flow = daily_ohlcv(["510300.SH", "510500.SH"], start_date, end_date)
-    etf_flow = etf_flow.assign(margin_balance=etf_flow["amount"] * 1.2)
+    balances = etf_flow[["date", "symbol"]].copy()
+    balances["margin_balance"] = 10_000_000 + 20_000 * np.sin(balances.groupby("symbol").cumcount() / 3)
     return {
         "index_ohlcv": daily_ohlcv(["000300.SH"], start_date, end_date),
         "futures_ohlcv": daily_ohlcv(["IF.CFE"], start_date, end_date),
         "open_interest": futures_open_interest(["IF.CFE"], start_date, end_date),
         "rates": interest_rates(["DR007.IB", "CGB10Y", "CGB30Y"], start_date, end_date),
         "etf_flow": etf_flow,
+        "margin_financing": balances,
         "overseas_ohlcv": daily_ohlcv(["SPX.GI", "N225.GI", "KS11.GI"], start_date, end_date),
         "ashare_ohlcv": daily_ohlcv(["000016.SH", "000300.SH", "000688.SH", "399006.SZ"], start_date, end_date),
     }

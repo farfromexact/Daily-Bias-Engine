@@ -59,3 +59,19 @@ def test_evaluate_bias_predictions_returns_requested_metrics() -> None:
     assert metrics["trend_day_recall"] == 1.0
     assert metrics["big_loss_day_filter_rate"] == 1.0
     assert metrics["false_risk_off_rate"] == 1 / 3
+
+
+def test_loss_alerts_and_intraday_neutral_benchmark_have_distinct_denominators():
+    days = pd.date_range("2026-11-16", periods=3)
+    scores = pd.DataFrame(dict(date=days, bias_label=["Neutral", "Risk-Off", "Risk-On"], trend_day_probability=50))
+    labels = pd.DataFrame(dict(date=days, market_return=[-0.02, 0.01, 0.02],
+                               composite_open_to_close_return=[0.001, -0.01, None],
+                               trend_day_flag=False, big_loss_day_flag=[True, False, False]))
+    metrics = evaluate_bias_predictions(scores, labels)
+    assert metrics["big_loss_day_filter_rate"] == 1.0
+    assert metrics["big_loss_risk_off_recall"] == 0.0
+    assert metrics["intraday_observations"] == 2
+    assert metrics["intraday_bias_accuracy"] == 1.0
+    assert metrics["intraday_neutral_baseline"] == 0.5
+    no_events = evaluate_bias_predictions(scores.assign(bias_label="Neutral"), labels.assign(big_loss_day_flag=False))
+    assert no_events["big_loss_risk_off_recall"] is None and no_events["risk_off_big_loss_precision"] is None

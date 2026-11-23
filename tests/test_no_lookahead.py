@@ -113,3 +113,14 @@ def test_no_lookahead_contract_rejects_market_result_before_signal_date() -> Non
 
     with pytest.raises(ValueError, match="date >= signal_date"):
         validate_no_lookahead_contract(factors, market_results=market_results, decision_time="09:20:00")
+
+
+def test_domestic_holiday_and_availability_day_are_checked():
+    sessions = pd.DatetimeIndex(["2026-09-30", "2026-10-08"])
+    row = pd.DataFrame([dict(signal_date="2026-10-08", data_date="2026-10-07",
+                             data_source="Wind EDB using CGB tenors", available_time="16:30:00")])
+    with pytest.raises(ValueError, match="previous_trading_day"):
+        validate_no_lookahead_contract(row, trading_sessions=sessions)
+    row = row.assign(factor_name="overseas_market_momentum", available_date="2026-10-08", available_time="09:21:00")
+    with pytest.raises(ValueError, match="available_time"):
+        validate_no_lookahead_contract(row, trading_sessions=sessions)

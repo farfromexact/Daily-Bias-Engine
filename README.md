@@ -1,6 +1,6 @@
 # Daily Bias Engine
 
-Daily Bias Engine 是一个面向 A 股指数环境判断的盘前市场风向系统。它把本地化的 Wind 行情、利率、ETF、期货、海外市场和期权链数据整理成可审计的因子，再输出 `Risk-On / Neutral / Risk-Off` 市场偏向、趋势日概率、风险硬标记和回测诊断。
+Daily Bias Engine 是一个面向 A 股指数环境判断的盘前市场风向系统。它把本地化的 Wind 行情、利率、ETF、期货、海外市场和期权链数据整理成可审计的因子，再输出 `Risk-On / Neutral / Risk-Off` 市场偏向、趋势强度分、风险硬标记和回测诊断。
 
 项目定位不是自动交易系统，而是一个研究型市场环境过滤器。它适合放在个人页面或项目作品集中展示：数据工程、因子工程、规则引擎、回测评估、期权结构分析和 Streamlit 产品化界面。
 
@@ -13,7 +13,9 @@ Daily Bias Engine 是一个面向 A 股指数环境判断的盘前市场风向�
 - 研究诊断闭环：包含 backtest、factor diagnostics、score bucket、trend bucket 和权重优化 shadow report。
 - Streamlit dashboard：面向日常复盘和项目展示的交互式界面。
 
-## Streamlit Gallery
+## 历史界面截图
+
+当前看板通过左侧导航切换研究页面。2026 年 11 月的回测复核与改进建议见使用手册第 17 节。[系统复核与改进顺序](USER_MANUAL.md#17-2026-11-23-系统复核与改进顺序)
 
 ### Overview
 
@@ -33,14 +35,14 @@ Daily Bias Engine 是一个面向 A 股指数环境判断的盘前市场风向�
 
 ## What The Dashboard Shows
 
-`apps/streamlit_app.py` 是项目的主要展示入口。当前页面包含：
+`apps/streamlit_app.py` 是项目的主要展示入口。在左侧选择研究页面。
 
-- Overview：最新信号、市场风向、总分、趋势日概率、置信度和驱动拆解。
+- Overview：最新信号、市场风向、总分、趋势强度分、信号强度分和驱动拆解。
 - Factors：当前信号日使用的因子明细和全历史因子表。
 - Engine：每日信号总览、分项分、风险硬标记和全部因子贡献。
 - Labels：收盘后 realized label，用于评估盘前信号。
-- Backtest：方向命中率、趋势日识别、大亏日过滤和逐日复盘。
-- Backtest Diagnostics：按风向、总分分桶和趋势概率分桶检查历史表现。
+- Backtest：收盘到收盘及开盘到收盘命中率、始终中性基准、大亏日明确防守率和逐日复盘。
+- Backtest Diagnostics：按风向、总分分桶和趋势强度分桶检查历史表现。
 - Factor Diagnostics：逐因子检验方向收益关系、亏损识别能力和五分位表现。
 - Weight Diagnostics：展示当前权重、优化权重和 constrained blended shadow 权重。
 - Liquidity：展示独立的美元流动性面板，指标保留采集时的实际来源（包括 FRED 和 Yahoo）。此面板不参与风向评分。

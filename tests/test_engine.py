@@ -47,8 +47,19 @@ def test_daily_bias_engine_scores_weighted_factors() -> None:
     assert "flow" in row["sub_scores"]
     assert row["explanation"]["bias_label"] == "Risk-On"
     assert len(row["explanation"]["factors"]) == 2
-    assert len(row["explanation"]["positive_drivers"]) == 2
-    assert len(row["explanation"]["negative_drivers"]) == 2
+    assert [d["factor_name"] for d in row["explanation"]["positive_drivers"]] == ["risk_on_factor"]
+    assert [d["factor_name"] for d in row["explanation"]["negative_drivers"]] == ["risk_off_factor"]
+
+
+def test_unconfigured_and_zero_weight_factors_cannot_override_active_factors():
+    factors = pd.DataFrame(dict(date="2026-11-23", data_date="2026-11-20", asof_time="16:30:00",
+                                raw_value=1.0, zscore_value=1.0, factor_name=["active", "experimental", "retired"],
+                                directional_score=[0.4, -1.0, -1.0]))
+    engine = DailyBiasEngine(weights={"active": 0.2, "retired": 0.0}, groups={},
+                             hard_risk_off_factors={"experimental": -70, "retired": -70})
+    row = engine.score(factors).iloc[0]
+    assert row["bias_label"] == "Risk-On" and row["risk_flags_json"] == []
+    assert sum(f["contribution"] for f in row["explanation"]["factors"]) == row["total_score"] == 40.0
 
 
 def test_daily_bias_engine_labels_neutral_inside_thresholds() -> None:

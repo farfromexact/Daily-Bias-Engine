@@ -329,10 +329,7 @@ def _prepare_model_frame(factors: pd.DataFrame, labels: pd.DataFrame, factor_nam
         .sort_index()
         .copy()
     )
-    for factor in factor_names:
-        if factor not in factor_pivot.columns:
-            factor_pivot[factor] = 0.0
-    factor_pivot = factor_pivot[list(factor_names)].fillna(0.0)
+    factor_pivot = factor_pivot.reindex(columns=factor_names)
 
     target = labels.copy()
     target["date"] = pd.to_datetime(target["date"]).dt.normalize()
@@ -397,7 +394,7 @@ def _training_return_scores(train: pd.DataFrame, factor_names: Sequence[str], cf
     target = pd.to_numeric(train["market_return"], errors="coerce").fillna(0.0)
     scores: dict[str, float] = {}
     for factor in factor_names:
-        signal = pd.to_numeric(train[factor], errors="coerce").fillna(0.0)
+        signal = pd.to_numeric(train[factor], errors="coerce")
         ic = _safe_corr(signal, target)
         hit_rate = _direction_hit_rate(signal, target)
         strong = signal.abs() >= cfg.strong_signal_threshold
@@ -414,7 +411,7 @@ def _training_risk_scores(train: pd.DataFrame, factor_names: Sequence[str], cfg:
     target = big_loss.astype(float)
     scores: dict[str, float] = {}
     for factor in factor_names:
-        risk_signal = -pd.to_numeric(train[factor], errors="coerce").fillna(0.0)
+        risk_signal = -pd.to_numeric(train[factor], errors="coerce")
         corr = _safe_corr(risk_signal, target)
         high_risk = risk_signal >= cfg.risk_high_threshold
         if big_loss.any():
@@ -594,11 +591,9 @@ def _aggregate_oos_metrics(oos: pd.DataFrame, cfg: WeightOptimizerConfig) -> dic
 
 def _composite_score(frame: pd.DataFrame, weights: Mapping[str, float], factor_names: Sequence[str]) -> pd.Series:
     weight_values = pd.Series({factor: float(weights.get(factor, 0.0)) for factor in factor_names})
-    weight_sum = weight_values.abs().sum()
-    if weight_sum <= 0:
-        return pd.Series(0.0, index=frame.index)
-    matrix = frame[list(factor_names)].apply(pd.to_numeric, errors="coerce").fillna(0.0)
-    return matrix.dot(weight_values) / weight_sum
+    matrix = frame[list(factor_names)].apply(pd.to_numeric, errors="coerce")
+    available_weight = matrix.notna().astype(float).dot(weight_values.abs())
+    return matrix.fillna(0.0).dot(weight_values).div(available_weight.replace(0.0, np.nan)).fillna(0.0)
 
 
 def _risk_score(frame: pd.DataFrame, weights: Mapping[str, float], factor_names: Sequence[str]) -> pd.Series:
@@ -985,8 +980,8 @@ def _leakage_checks(factors: pd.DataFrame, model: pd.DataFrame, folds: Sequence[
     if not data_before_signal:
         warnings.append("Some factor rows have data_date >= signal date.")
     target_alignment = (
-        "market_return is the realized return on signal date; because factors require data_date < signal date, "
-        "this is equivalent to a next-day target from the factor data date."
+        "market_return is the realized close-to-close return on the domestic signal date. "
+        "Financing and holiday observations can come from earlier sessions."
     )
     checks.append({"name": "next_day_return_shift_minus_one_contract", "pass": True, "note": target_alignment})
     checks.append({"name": "rolling_zscore_no_full_sample_refit_in_optimizer", "pass": True, "note": "optimizer consumes as-of directional_score only"})
@@ -1070,7 +1065,6 @@ def _build_recommendation(
     direction_hit = oos_metrics.get("direction_hit_rate")
     strong_count = int(oos_metrics.get("strong_signal_count") or 0)
     capture = oos_metrics.get("big_loss_capture_rate")
-    avoidance = oos_metrics.get("big_loss_avoidance_rate")
     blended_pass = bool(constraint_checks.get("constrained_blended_weights", {}).get("pass"))
     if not blended_pass:
         recommendation = "reject"
@@ -1094,24 +1088,21 @@ def _build_recommendation(
             "factor_name",
         ].tolist()
 
-    risk_filter_note = ""
-    if capture is not None and avoidance is not None and capture < 0.50 and avoidance >= 0.70:
-        risk_filter_note = "Model behaves more like a broad risk filter than a crash predictor."
+    true_alerts = int(oos_metrics.get("TP") or 0)
+    alerts = true_alerts + int(oos_metrics.get("FP") or 0)
+    loss_days = int(oos_metrics.get("big_loss_count") or 0)
+    sample_count = int(oos_metrics.get("sample_count") or 0)
+    risk_filter_note = f"The out-of-sample risk score flagged {true_alerts} of {loss_days} big-loss days across {alerts} alerts."
 
     can_return = (
         "No. Out-of-sample direction hit rate is not above 52%."
         if direction_hit is None or direction_hit <= 0.52
         else "Possibly, but only as shadow diagnostics until manually approved."
     )
-    can_risk = (
-        "Inconclusive."
-        if capture is None
-        else (
-            "Yes, risk filtering is useful, but crash prediction is limited."
-            if capture < 0.50 and avoidance is not None and avoidance >= 0.70
-            else "Possibly; review precision, recall, and false positives together."
-        )
-    )
+    can_risk = "Insufficient out-of-sample alerts or loss events to evaluate."
+    if capture is not None and alerts and sample_count:
+        can_risk = (f"Alert precision was {true_alerts / alerts:.1%} against a {loss_days / sample_count:.1%} "
+                    f"event base rate. Recall was {capture:.1%}.")
     adopt = "No. Nothing should be adopted into production automatically."
 
     return {

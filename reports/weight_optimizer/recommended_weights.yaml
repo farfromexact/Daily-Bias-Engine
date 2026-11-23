@@ -12,49 +12,49 @@ current_weights:
   ashare_breadth_proxy: 0.09
   ashare_turnover_momentum: 0.06
 optimized_return_weights:
-  equity_index_futures_basis: 0.24185380421462208
-  futures_open_interest_momentum: 0.10814619578537789
-  rates_change_5d: 0.011914060197989858
+  equity_index_futures_basis: 0.25
+  futures_open_interest_momentum: 0.09999999999999999
+  rates_change_5d: 0.003178907843446163
   yield_curve_slope: 0.0
-  etf_flow_proxy: 0.08836501042920107
-  margin_balance_momentum: 0.061634989570798916
-  overseas_market_momentum: 0.21558150439941204
-  overseas_volatility_pressure: 0.13441849560058794
+  etf_flow_proxy: 0.15
+  margin_balance_momentum: 0.0
+  overseas_market_momentum: 0.20050715538990088
+  overseas_volatility_pressure: 0.1494928446100991
   ashare_breadth_proxy: 0.0
-  ashare_turnover_momentum: 0.13808593980168618
+  ashare_turnover_momentum: 0.1468210921564124
 optimized_risk_weights:
-  equity_index_futures_basis: 0.10125732273571053
-  futures_open_interest_momentum: 0.06219393528697281
-  rates_change_5d: 0.049054327262611296
-  yield_curve_slope: 0.044888572510851515
-  etf_flow_proxy: 0.13633861753721885
-  margin_balance_momentum: 0.013661382462781146
-  overseas_market_momentum: 0.16751017618210087
-  overseas_volatility_pressure: 0.07509566602080328
-  ashare_breadth_proxy: 0.21029311399552297
-  ashare_turnover_momentum: 0.13970688600447698
+  equity_index_futures_basis: 0.10464326293114165
+  futures_open_interest_momentum: 0.05128909844524094
+  rates_change_5d: 0.03961323717563785
+  yield_curve_slope: 0.04732450277463633
+  etf_flow_proxy: 0.10220242341417092
+  margin_balance_momentum: 0.04779757658582907
+  overseas_market_momentum: 0.1828583613703236
+  overseas_volatility_pressure: 0.07427153730210931
+  ashare_breadth_proxy: 0.22804212803622853
+  ashare_turnover_momentum: 0.12195787196377146
 raw_blended_weights:
-  equity_index_futures_basis: 0.18674152168584884
-  futures_open_interest_momentum: 0.10325847831415116
-  rates_change_5d: 0.06476562407919594
+  equity_index_futures_basis: 0.19
+  futures_open_interest_momentum: 0.1
+  rates_change_5d: 0.061271563137378464
   yield_curve_slope: 0.06
-  etf_flow_proxy: 0.09534600417168043
-  margin_balance_momentum: 0.08465399582831956
-  overseas_market_momentum: 0.15823260175976483
-  overseas_volatility_pressure: 0.10176739824023517
+  etf_flow_proxy: 0.12
+  margin_balance_momentum: 0.06
+  overseas_market_momentum: 0.15220286215596035
+  overseas_volatility_pressure: 0.10779713784403964
   ashare_breadth_proxy: 0.054
-  ashare_turnover_momentum: 0.09123437592067447
+  ashare_turnover_momentum: 0.09472843686256496
 constrained_blended_weights:
   equity_index_futures_basis: 0.25
-  futures_open_interest_momentum: 0.1
-  rates_change_5d: 0.04340017193298371
-  yield_curve_slope: 0.037473944584341515
-  etf_flow_proxy: 0.08624142841111401
-  margin_balance_momentum: 0.062265988465665154
-  overseas_market_momentum: 0.2116559075505474
-  overseas_volatility_pressure: 0.10312597296182313
-  ashare_breadth_proxy: 0.03160482879590553
-  ashare_turnover_momentum: 0.07423175729664008
+  futures_open_interest_momentum: 0.0899665570892267
+  rates_change_5d: 0.04421884014462791
+  yield_curve_slope: 0.040469618178818514
+  etf_flow_proxy: 0.11856809382688228
+  margin_balance_momentum: 0.03143190617311771
+  overseas_market_momentum: 0.2071518215644043
+  overseas_volatility_pressure: 0.10972008885579733
+  ashare_breadth_proxy: 0.032396779248274755
+  ashare_turnover_momentum: 0.0760762949178976
 constraint_checks:
   current_weights:
     pass: false
@@ -65,33 +65,35 @@ constraint_checks:
   optimized_return_weights:
     pass: true
     violations: []
-    weight_sum: 0.9999999999996759
+    weight_sum: 0.9999999999998586
   optimized_risk_weights:
     pass: true
     violations: []
-    weight_sum: 0.9999999999990502
+    weight_sum: 0.9999999999990896
   raw_blended_weights:
     pass: false
     violations:
     - rates_change_5d exceeds cap 5.00%
     - ETF flow + margin proxy exceeds cap 15.00%
-    weight_sum: 0.9999999999998704
+    weight_sum: 0.9999999999999434
   constrained_blended_weights:
     pass: true
     violations: []
-    weight_sum: 0.9999999999990206
+    weight_sum: 0.9999999999990471
 recommendation:
   recommendation: shadow_only
   can_this_optimizer_improve_return_prediction: No. Out-of-sample direction hit rate
     is not above 52%.
-  can_this_optimizer_improve_risk_filtering: Yes, risk filtering is useful, but crash
-    prediction is limited.
+  can_this_optimizer_improve_risk_filtering: Alert precision was 12.5% against a 6.7%
+    event base rate. Recall was 7.5%.
   should_any_weight_be_adopted_into_production_now: No. Nothing should be adopted
     into production automatically.
   strong_signal_status: sufficient_sample_review_needed
-  risk_filter_note: Model behaves more like a broad risk filter than a crash predictor.
+  risk_filter_note: The out-of-sample risk score flagged 3 of 40 big-loss days across
+    24 alerts.
   negative_return_ic_factors_do_not_raise_return_weight:
   - ashare_breadth_proxy
+  - rates_change_5d
   - yield_curve_slope
   risk_score_only_candidates:
   - ashare_breadth_proxy

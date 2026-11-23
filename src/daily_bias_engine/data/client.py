@@ -31,6 +31,14 @@ class MarketDataClient(ABC):
     def get_interest_rates(self, series: Sequence[str], start_date: DateLike, end_date: DateLike) -> pd.DataFrame:
         """Return daily interest-rate series."""
 
+    def get_trading_calendar(self, start_date: DateLike, end_date: DateLike) -> pd.DatetimeIndex | None:
+        """Return the exchange sessions when the provider has a calendar."""
+        return None
+
+    def get_margin_financing(self, symbols: Sequence[str], start_date: DateLike, end_date: DateLike) -> pd.DataFrame | None:
+        """Return reported financing balances for the requested instruments if available."""
+        return None
+
 
 class MarketDataError(RuntimeError):
     """Raised when a market-data provider is unavailable or returns an error."""
@@ -68,6 +76,12 @@ class WindPyDataClient(MarketDataClient):
     asof_time: str = "16:30:00"
     options: str = "PriceAdj=F;Days=Trading;Fill=Blank"
 
+    def get_trading_calendar(self, start_date: DateLike, end_date: DateLike) -> pd.DatetimeIndex:
+        result = get_wind_session().tdays(_date(start_date), _date(end_date), "TradingCalendar=SSE")
+        check_wind_result(result, "SSE trading calendar")
+        dates = pd.DatetimeIndex(result.Data[0] if result.Data else []).normalize()
+        return dates[(dates >= pd.Timestamp(start_date)) & (dates <= pd.Timestamp(end_date))].unique().sort_values()
+
     def get_daily_ohlcv(self, symbols: Sequence[str], start_date: DateLike, end_date: DateLike) -> pd.DataFrame:
         fields = ["open", "high", "low", "close", "volume", "amt"]
         frames = []
@@ -83,7 +97,13 @@ class WindPyDataClient(MarketDataClient):
                 last = min(last, last_closed)
             if last < pd.Timestamp(start_date):
                 continue
-            bars = self._wsd(symbol, fields, start_date, last)
+            options = self.options
+            if symbol in {"SPX.GI", "N225.GI", "KS11.GI"}:
+                # Wind's default trading calendar omits foreign sessions during
+                # mainland holidays. Keep actual local OHLC bars from all dates.
+                parts = [part for part in options.split(";") if part and not part.lower().startswith("days=")]
+                options = ";".join([*parts, "Days=Alldays"])
+            bars = self._wsd(symbol, fields, start_date, last, options=options)
             # Wind can carry the previous CLOSE on a holiday even with Fill=Blank.
             bars = bars.dropna(subset=["open", "high", "low", "close"])
             frames.append(bars.assign(symbol=symbol, source="wind"))
@@ -119,8 +139,17 @@ class WindPyDataClient(MarketDataClient):
         frame = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=columns)
         return self._finish("interest_rates", series, start_date, end_date, frame)
 
-    def _wsd(self, symbol: str, fields: Sequence[str], start_date: DateLike, end_date: DateLike) -> pd.DataFrame:
-        result = get_wind_session().wsd(symbol, ",".join(fields), _date(start_date), _date(end_date), self.options)
+    def get_margin_financing(self, symbols: Sequence[str], start_date: DateLike, end_date: DateLike) -> pd.DataFrame:
+        frames = []
+        for symbol in symbols:
+            values = self._wsd(symbol, ["mrg_long_bal"], start_date, end_date)
+            frames.append(values.dropna(subset=["mrg_long_bal"]).assign(symbol=symbol, source="wind_wsd"))
+        frame = pd.concat(frames, ignore_index=True).rename(columns={"mrg_long_bal": "margin_balance"})
+        return self._finish("margin_financing", symbols, start_date, end_date, frame)
+
+    def _wsd(self, symbol: str, fields: Sequence[str], start_date: DateLike, end_date: DateLike,
+             *, options: str | None = None) -> pd.DataFrame:
+        result = get_wind_session().wsd(symbol, ",".join(fields), _date(start_date), _date(end_date), options or self.options)
         check_wind_result(result, f"WSD {symbol} {','.join(fields)}")
         return _history_frame(result, fields, start_date, end_date)
 

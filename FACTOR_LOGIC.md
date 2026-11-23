@@ -24,13 +24,11 @@
 | `rates_change_5d` | 利率与债券 | `DR007.IB` 5 日差分 | 利率上行偏 Risk-Off |
 | `yield_curve_slope` | 利率与债券 | `S0059752` 30Y 国债到期收益率 - `S0059749` 10Y 国债到期收益率 | 曲线变陡暂偏 Risk-On |
 | `etf_flow_proxy` | ETF 与资金流 | ETF 成交额 5 日变化率 | 成交额放大偏 Risk-On |
-| `margin_balance_momentum` | ETF 与资金流 | 两融余额或 proxy 的 5 日变化率 | 杠杆资金回升偏 Risk-On |
+| `margin_balance_momentum` | ETF 与资金流 | 两只 ETF 的 Wind 融资余额合计的 5 个上交所交易日变化率 | 杠杆资金回升偏 Risk-On |
 | `overseas_market_momentum` | 海外隔夜 | 美国、日本、韩国指数加权 1 日收益率，权重为 80% / 10% / 10% | 海外上涨偏 Risk-On |
 | `overseas_volatility_pressure` | 海外隔夜 | 美国、日本、韩国指数加权日内振幅，权重为 80% / 10% / 10% | 波动放大偏 Risk-Off |
 | `ashare_breadth_proxy` | A股市场结构 | 上证50、沪深300、科创50、创业板指上涨比例 - 0.5 | 扩散度提高偏 Risk-On |
 | `ashare_turnover_momentum` | A股市场结构 | 上证50、沪深300、科创50、创业板指成交量 5 日变化率 | 成交放大暂偏 Risk-On |
-
-## 重要限制
 
 ## 真实数据与 proxy 的区别
 
@@ -42,7 +40,7 @@
 - ETF 成交额是真实行情数据，但它只是 ETF 净申购/份额变化的 proxy。
 - 指数样本上涨比例是真实指数价格派生结果，但它只是全市场上涨家数的 proxy。
 - 海外指数高低价振幅是真实海外指数价格派生结果，但它只是 VIX/CNH/美元压力的 proxy。
-- `margin_balance_momentum` 当前还不是真实两融字段，而是由 ETF 成交额派生的演示 proxy。
+- `margin_balance_momentum` 仅覆盖 510300.SH 和 510500.SH。两端都需要两只 ETF 的 `mrg_long_bal` 回执，T 日值从 T+2 盘前起使用。缺数时，剩余因子的实际权重按比例归一。
 
 当前版本仍是研究框架，不是最终投研模型：
 

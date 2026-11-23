@@ -70,24 +70,24 @@ class FetchResult:
 INDICATORS: list[IndicatorSpec] = [
     IndicatorSpec(
         name="Fed Balance Sheet / Total Assets",
+        preferred_source="FRED",
         frequency_hint="weekly",
         fred_ids=("WALCL",),
-        wind_candidates=("WALCL",),
         comments="Quantity of liquidity. FRED WALCL is in millions of USD.",
     ),
     IndicatorSpec(
         name="ON RRP",
+        preferred_source="FRED",
         frequency_hint="daily",
         fred_ids=("RRPONTSYD",),
-        wind_candidates=("RRPONTSYD",),
-        comments="Quantity of liquidity. Falling ON RRP usually releases liquidity, so modeling direction should be inverted.",
+        comments="FRED RRPONTSYD in billions of USD.",
     ),
     IndicatorSpec(
         name="TGA",
+        preferred_source="FRED",
         frequency_hint="weekly",
         fred_ids=("WTREGEN",),
-        wind_candidates=("WTREGEN",),
-        comments="Treasury General Account. Rising TGA usually drains liquidity, so modeling direction should be inverted.",
+        comments="FRED WTREGEN, weekly average Treasury General Account balance in millions of USD.",
     ),
     IndicatorSpec(
         name="SOFR",
@@ -183,7 +183,7 @@ INDICATORS: list[IndicatorSpec] = [
         frequency_hint="daily/weekly",
         is_proxy=True,
         proxy_components=("Fed Balance Sheet / Total Assets", "TGA", "ON RRP"),
-        comments="Derived proxy: Fed Total Assets - TGA - ON RRP. Components should be aligned and forward-filled.",
+        comments="Millions of USD. WALCL minus WTREGEN minus 1000 times RRPONTSYD. Latest observations carried forward.",
     ),
 ]
 
@@ -405,7 +405,7 @@ def build_net_liquidity_proxy(spec: IndicatorSpec, raw_series: dict[str, pd.Seri
     if panel.empty:
         return failure(spec, "derived_proxy", "Fed Total Assets - TGA - ON RRP", "Component panel is empty.")
     panel = panel.set_index("date").sort_index().ffill()
-    value = panel["Fed Balance Sheet / Total Assets"] - panel["TGA"] - panel["ON RRP"]
+    value = panel["Fed Balance Sheet / Total Assets"] - panel["TGA"] - 1000.0 * panel["ON RRP"]
     value = clean_series(value)
     if value.empty:
         return failure(spec, "derived_proxy", "Fed Total Assets - TGA - ON RRP", "Derived series is empty.")

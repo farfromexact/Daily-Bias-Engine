@@ -26,6 +26,7 @@ from daily_bias_engine.features import factor_logic_rows
 from daily_bias_engine.pipeline import (
     SnapshotInfo,
     list_snapshots,
+    load_snapshot_outputs,
     run_pipeline_from_snapshot,
 )
 from daily_bias_engine.options.data import OptionMarketDataStore
@@ -46,7 +47,7 @@ Daily Bias Engine 是一个盘前市场风向仪。它不直接给交易指令�
 
 ### 每天应该先看什么
 
-1. 先看 Overview 顶部六个指标：信号日期、市场风向、总分、趋势日概率、趋势方向、置信度。
+1. 先看 Overview 顶部六个指标：信号日期、市场风向、总分、趋势强度分、趋势方向、信号强度分。
 2. 再看“每日环境卡片”：这是把数字翻译成人话后的当天摘要。
 3. 如果风向或总分看起来反直觉，去看“正向驱动 / 负向驱动”，它会告诉你今天主要是谁在拉高或压低总分。
 4. 如果最终风向被风险覆盖改写，优先看“风险硬标记”。硬风险会覆盖普通加权分数。
@@ -77,23 +78,23 @@ HELP_TEXT = {
     "metric_signal_date": "当前展示的盘前信号日期。比如 2026-06-16 表示这是给 2026-06-16 交易日使用的环境判断。",
     "metric_market_bias": "最终市场风向。Risk-On 表示环境偏进攻；Neutral 表示等待或轻仓观察；Risk-Off 表示防守优先。最终风向可能被风险硬标记覆盖。",
     "metric_total_score": "所有因子按配置权重加权后的总分。正数偏多，负数偏空，接近 0 表示信号不强。它不是收益率预测，而是环境分数。",
-    "metric_trend_probability": "系统估计当天出现趋势日的概率。趋势日指市场更可能单边扩展，而不是窄幅震荡。概率高不代表方向确定，还要结合趋势方向。",
-    "metric_trend_direction": "系统根据标签和因子结构估计的趋势方向：上行、下行或不明确。方向不明确时，即使趋势概率较高，也不应直接理解为单边看多或看空。",
-    "metric_confidence": "置信度来自总分强度和风险覆盖后的综合结果。置信度高表示系统当前判断更集中；置信度低表示因子分歧较大或总分接近中性。",
+    "metric_trend_probability": "0 到 100 的规则分，由总分绝对值和硬风险标记计算。各分档的实际趋势日发生率可在 Backtest Diagnostics 查看。",
+    "metric_trend_direction": "系统根据标签和因子结构估计的趋势方向：上行、下行或不明确。方向不明确时，即使趋势强度较高，也不应直接理解为单边看多或看空。",
+    "metric_confidence": "取总分绝对值与触发硬风险的最大因子分绝对值中的较大值。",
     "metric_observations": "参与回测评估的历史样本天数。样本越多，统计结果越稳定；但市场结构变化也会让很久以前的样本参考价值下降。",
     "metric_bias_accuracy": "方向命中率衡量 Risk-On 后市场上涨、Risk-Off 后市场下跌、Neutral 后市场相对平稳的比例。它不是单笔交易胜率。",
-    "metric_trend_precision": "趋势日 precision 表示系统认为趋势概率较高的日子里，有多少最终真的成为趋势日。它衡量信号发出后的准确性。",
+    "metric_trend_precision": "趋势日 precision 表示系统认为趋势强度较高的日子里，有多少最终真的成为趋势日。它衡量信号发出后的准确性。",
     "metric_trend_recall": "趋势日 recall 表示所有真实趋势日里，系统提前识别到了多少。它衡量系统漏掉趋势日的程度。",
-    "metric_big_loss_filter": "大亏日过滤率衡量系统在历史大亏日之前或当天给出防守提示的能力。它越高，说明风控过滤越有效。",
-    "metric_false_risk_off": "Risk-Off 误伤率衡量系统提示防守但市场并未走坏的比例。误伤率太高会错过机会，太低可能说明保护不足。",
-    "section_daily_card": "每日环境卡片把总分、趋势概率、风险覆盖和主要驱动翻译成一句操作语境。它适合做当天第一眼的环境摘要。",
+    "metric_big_loss_filter": "大亏日中盘前为 Neutral 或 Risk-Off 的比例，始终给 Neutral 也会得到 100%。",
+    "metric_false_risk_off": "实际未触发大亏日标签的日期中，盘前给出 Risk-Off 的比例。",
+    "section_daily_card": "每日环境卡片把总分、趋势强度、风险覆盖和主要驱动翻译成一句操作语境。它适合做当天第一眼的环境摘要。",
     "section_risk_override": "风险覆盖表示某些硬风险条件触发后，系统会把普通加权分数降级。它用于避免总分还可以、但底层风险已经恶化的情况。",
     "section_positive_drivers": "正向驱动列出今天贡献最高的多头或 Risk-On 因子。贡献值等于因子分数乘以权重。",
     "section_negative_drivers": "负向驱动列出今天拖累总分的因子。它帮助判断是利率、海外、期货结构、资金流还是 A 股结构在压制环境。",
     "section_hard_risk": "风险硬标记是比普通加权更强的保护规则。如果某个因子跌破硬风险阈值，最终风向可能被强制转为 Risk-Off。",
     "section_selected_factors": "这里展示当前信号日期实际用到的全部因子行，包括原始值、z-score、方向分、数据日期和可用时间。",
     "section_all_factor_history": "全历史因子明细用于审计和排查。它不是每天必须看的表，主要用来确认某个因子在历史上怎么变化。",
-    "section_engine_summary": "每日信号总览列出历史每一天的原始风向、最终风向、风险覆盖、总分、置信度和趋势判断。",
+    "section_engine_summary": "每日信号总览列出历史每一天的原始风向、最终风向、风险覆盖、总分、信号强度分和趋势判断。",
     "section_engine_explain": "引擎解释展示某一天的完整拆解：分项分、风险标记、驱动因子和全部因子贡献。",
     "section_sub_scores": "分项分按模块聚合，例如海外、期货、ETF/融资、A 股结构、利率债券。它能告诉你今天的总分主要来自哪个模块。",
     "section_factor_contribution": "全部因子贡献展示每个因子的方向分、权重和最终贡献。贡献加总后形成总分，再经过风险规则得到最终风向。",
@@ -103,7 +104,7 @@ HELP_TEXT = {
     "section_daily_review": "逐日复盘逐天列出信号和结果，适合检查某段时间为什么命中或失效。",
     "section_bias_diagnostics": "按最终风向分组统计不同风向后的平均收益、胜率、趋势日率和最大亏损，用于判断风向标签是否有区分度。",
     "section_score_bucket": "总分分桶把历史总分分成区间，观察高分、低分和中性分数后的真实市场表现。",
-    "section_trend_bucket": "趋势概率分桶检查系统给出的趋势概率是否和真实趋势日发生率一致。",
+    "section_trend_bucket": "按规则分分组，逐档比较样本数及实际趋势日发生率。",
     "section_factor_diagnostics": "因子诊断从历史角度检查每个因子和后续收益、亏损日、趋势日的关系。它是研究工具，不是当天交易指令。",
     "factor_sort_mode": "选择因子诊断表的排序口径：按亏损识别能力、方向收益关系，或寻找关系弱/反向的因子。",
     "factor_quintile": "查看单个因子分成五档后，后续市场表现是否有单调性。它用于判断因子有没有稳定区分度。",
@@ -154,7 +155,7 @@ def run_dashboard_pipeline(snapshot_dir: str | Path | None = None) -> dict[str, 
             raise FileNotFoundError(f"No local market snapshot found under {SNAPSHOT_ROOT}.")
         snapshot_dir = snapshots[0].path
     try:
-        return _load_dashboard_snapshot_outputs(snapshot_dir)
+        return load_snapshot_outputs(snapshot_dir)
     except Exception as exc:
         result = run_pipeline_from_snapshot(snapshot_dir=snapshot_dir, config_dir=CONFIG_DIR)
         result["snapshot_load_mode"] = "raw_fallback"
@@ -163,30 +164,6 @@ def run_dashboard_pipeline(snapshot_dir: str | Path | None = None) -> dict[str, 
             f"recalculated from raw snapshot data. Detail: {exc}"
         )
         return result
-
-
-def _load_dashboard_snapshot_outputs(snapshot_dir: str | Path) -> dict[str, Any]:
-    output_dir = Path(snapshot_dir) / "outputs"
-    paths = {
-        "factors": output_dir / "factor_daily.parquet",
-        "scores": output_dir / "bias_daily.parquet",
-        "labels": output_dir / "market_result_daily.parquet",
-        "metrics": output_dir / "metrics.json",
-        "report": output_dir / "report.json",
-    }
-    missing = [str(path) for path in paths.values() if not path.exists()]
-    if missing:
-        raise FileNotFoundError(f"Snapshot is missing precomputed outputs: {missing}")
-    return {
-        "factors": pd.read_parquet(paths["factors"]),
-        "scores": pd.read_parquet(paths["scores"]),
-        "labels": pd.read_parquet(paths["labels"]),
-        "metrics": json.loads(paths["metrics"].read_text(encoding="utf-8")),
-        "report": json.loads(paths["report"].read_text(encoding="utf-8")),
-        "data_mode": "snapshot",
-        "raw": {},
-        "snapshot_load_mode": "outputs",
-    }
 
 
 @st.cache_data(show_spinner="Loading local market snapshot...")
@@ -251,9 +228,9 @@ def main() -> None:
     if result is None:
         st.error(data_warning)
         st.stop()
-    scores = result["scores"].copy()
-    labels = result["labels"].copy()
-    factors = result["factors"].copy()
+    scores = result["scores"]
+    labels = result["labels"]
+    factors = result["factors"]
     metrics = result["metrics"]
     if data_warning:
         st.warning(data_warning)
@@ -275,50 +252,38 @@ def main() -> None:
     selected_row = _selected_engine_row(scores, selected_date)
     selected_explanation = selected_row.get("explanation", {}) if selected_row else {}
     selected_label = _selected_label_row(labels, selected_date)
-    selected_factors = _factor_rows_for_date(factors, selected_date)
 
     st.caption(_data_status_text(result, snapshot_info, scores))
 
-    (
-        overview,
-        factors_tab,
-        engine_tab,
-        labels_tab,
-        backtest_tab,
-        backtest_diagnostics_tab,
-        factor_diagnostics_tab,
-        weight_diag_tab,
-        options_tab,
-        liquidity_tab,
-        logic_tab,
-    ) = st.tabs(
-        [
-            "Overview",
-            "Factors",
-            "Engine",
-            "Labels",
-            "Backtest",
-            "Backtest Diagnostics",
-            "Factor Diagnostics",
-            "Weight Diagnostics",
-            "Options",
-            "Liquidity",
-            "Logic",
-        ]
+    page = st.sidebar.radio(
+        "研究页面",
+        ["Overview", "Factors", "Engine", "Labels", "Backtest", "Backtest Diagnostics",
+         "Factor Diagnostics", "Weight Diagnostics", "Options", "Liquidity", "Logic"],
+        key="research_page",
     )
 
-    with overview:
+    if page == "Overview":
         columns = st.columns(6)
         columns[0].metric("信号日期", selected_date, help=_help_text("metric_signal_date"))
         columns[1].metric("市场风向", _bias_label(selected_row.get("bias_label") if selected_row else None), help=_help_text("metric_market_bias"))
         columns[2].metric("总分", _format_float(selected_row.get("total_score") if selected_row else None), help=_help_text("metric_total_score"))
         columns[3].metric(
-            "趋势日概率",
-            f"{_format_float(selected_row.get('trend_day_probability') if selected_row else None)}%",
+            "趋势强度分",
+            f"{_format_float(selected_row.get('trend_day_probability') if selected_row else None)} / 100",
             help=_help_text("metric_trend_probability"),
         )
         columns[4].metric("趋势方向", _trend_label(selected_row.get("trend_direction_bias") if selected_row else None), help=_help_text("metric_trend_direction"))
-        columns[5].metric("置信度", f"{_format_float(selected_row.get('confidence') if selected_row else None)}%", help=_help_text("metric_confidence"))
+        columns[5].metric("信号强度分", f"{_format_float(selected_row.get('confidence') if selected_row else None)} / 100", help=_help_text("metric_confidence"))
+
+        if selected_date == latest_signal_date:
+            closes = result["report"].get("overseas_last_close", {})
+            if closes:
+                st.caption("海外市场最近收盘（当地日期）  " + " · ".join(f"{k} {v}" for k, v in closes.items()))
+                components = result["report"].get("latest_overseas_components")
+                if components is not None and len(components) < len(closes):
+                    st.info("当前海外因子仅使用 " + "、".join(components) + " 的当日收盘，按可用市场重新分配权重。")
+            if result["report"].get("signal_calendar") != "wind_sse":
+                st.caption("此历史快照缺少 Wind 交易日历，末端盘前日期按工作日估算。")
 
         _subheader("每日环境卡片", "section_daily_card")
         st.write(_trading_posture(selected_row))
@@ -347,13 +312,13 @@ def main() -> None:
         else:
             st.write("无")
 
-    with factors_tab:
+    elif page == "Factors":
         _subheader(f"{selected_date} 信号使用的因子", "section_selected_factors")
-        st.dataframe(_factor_display_table(selected_factors), width="stretch", hide_index=True)
-        with st.expander("查看全部历史因子明细"):
+        st.dataframe(_factor_display_table(_factor_rows_for_date(factors, selected_date)), width="stretch", hide_index=True)
+        if st.checkbox("查看全部历史因子明细"):
             st.dataframe(_factor_display_table(factors), width="stretch", hide_index=True)
 
-    with engine_tab:
+    elif page == "Engine":
         _subheader("每日信号总览", "section_engine_summary")
         st.dataframe(_engine_summary_table(scores), width="stretch", hide_index=True)
 
@@ -362,12 +327,12 @@ def main() -> None:
         detail_columns[0].metric("市场风向", _bias_label(selected_row.get("bias_label") if selected_row else None), help=_help_text("metric_market_bias"))
         detail_columns[1].metric("总分", _format_float(selected_row.get("total_score") if selected_row else None), help=_help_text("metric_total_score"))
         detail_columns[2].metric(
-            "趋势日概率",
-            f"{_format_float(selected_row.get('trend_day_probability') if selected_row else None)}%",
+            "趋势强度分",
+            f"{_format_float(selected_row.get('trend_day_probability') if selected_row else None)} / 100",
             help=_help_text("metric_trend_probability"),
         )
         detail_columns[3].metric("趋势方向", _trend_label(selected_row.get("trend_direction_bias") if selected_row else None), help=_help_text("metric_trend_direction"))
-        detail_columns[4].metric("置信度", f"{_format_float(selected_row.get('confidence') if selected_row else None)}%", help=_help_text("metric_confidence"))
+        detail_columns[4].metric("信号强度分", f"{_format_float(selected_row.get('confidence') if selected_row else None)} / 100", help=_help_text("metric_confidence"))
 
         _subheader("分项分", "section_sub_scores")
         st.dataframe(_sub_scores_table(selected_row.get("sub_scores", {}) if selected_row else {}), width="stretch", hide_index=True)
@@ -390,7 +355,7 @@ def main() -> None:
         _subheader("全部因子贡献", "section_factor_contribution")
         st.dataframe(_factor_contribution_table(selected_explanation.get("factors", [])), width="stretch", hide_index=True)
 
-    with labels_tab:
+    elif page == "Labels":
         st.markdown(
             """
             `标签` 是收盘后的市场结果，用来评价开盘前信号有没有提前识别环境。
@@ -406,16 +371,24 @@ def main() -> None:
         _subheader("全部标签", "section_labels")
         st.dataframe(_label_display_table(labels), width="stretch", hide_index=True)
 
-    with backtest_tab:
+    elif page == "Backtest":
         _subheader("回测摘要", "section_backtest_summary")
         st.markdown(_backtest_plain_language(metrics))
         metric_columns = st.columns(6)
         metric_columns[0].metric("样本天数", str(metrics.get("observations", 0)), help=_help_text("metric_observations"))
-        metric_columns[1].metric("方向命中率", _format_percent(metrics.get("bias_accuracy")), help=_help_text("metric_bias_accuracy"))
+        metric_columns[1].metric("收盘到收盘命中率", _format_percent(metrics.get("bias_accuracy")), help=_help_text("metric_bias_accuracy"))
         metric_columns[2].metric("趋势日 precision", _format_percent(metrics.get("trend_day_precision")), help=_help_text("metric_trend_precision"))
         metric_columns[3].metric("趋势日 recall", _format_percent(metrics.get("trend_day_recall")), help=_help_text("metric_trend_recall"))
-        metric_columns[4].metric("大亏日过滤率", _format_percent(metrics.get("big_loss_day_filter_rate")), help=_help_text("metric_big_loss_filter"))
+        metric_columns[4].metric("大亏日中性或防守率", _format_percent(metrics.get("big_loss_day_filter_rate")), help=_help_text("metric_big_loss_filter"))
         metric_columns[5].metric("Risk-Off 误伤率", _format_percent(metrics.get("false_risk_off_rate")), help=_help_text("metric_false_risk_off"))
+        if "intraday_observations" in metrics:
+            intraday = st.columns(4)
+            intraday[0].metric("开盘到收盘命中率", _format_percent(metrics["intraday_bias_accuracy"]))
+            intraday[1].metric("始终中性 · 日内基准", _format_percent(metrics["intraday_neutral_baseline"]))
+            intraday[2].metric("大亏日明确防守率", _format_percent(metrics["big_loss_risk_off_recall"]))
+            intraday[3].metric("防守信号中大亏占比", _format_percent(metrics["risk_off_big_loss_precision"]))
+            st.caption(f"日内评价共 {metrics['intraday_observations']} 天。实际大亏 {metrics['big_loss_days']} 天，"
+                       f"其中 {metrics['big_loss_risk_off_days']} 天盘前明确给出 Risk-Off。全期共发出 {metrics['risk_off_days']} 次 Risk-Off。")
 
         _subheader("指标解释", "section_metrics_explain")
         st.dataframe(_metrics_explanation_table(metrics), width="stretch", hide_index=True)
@@ -423,7 +396,7 @@ def main() -> None:
         _subheader("逐日复盘", "section_daily_review")
         st.dataframe(_backtest_review_table(scores, labels), width="stretch", hide_index=True)
 
-    with backtest_diagnostics_tab:
+    elif page == "Backtest Diagnostics":
         _subheader("按最终风向分组", "section_bias_diagnostics")
         st.caption("这些统计只把开盘前信号与同一信号日收盘后的 realized label 对齐，不会回灌到因子生成。")
         st.dataframe(_bias_diagnostics_table(bias_return_diagnostics(scores, labels)), width="stretch", hide_index=True)
@@ -431,14 +404,14 @@ def main() -> None:
         _subheader("总分分桶", "section_score_bucket")
         st.dataframe(_score_bucket_table(score_bucket_diagnostics(scores, labels)), width="stretch", hide_index=True)
 
-        _subheader("趋势概率分桶", "section_trend_bucket")
+        _subheader("趋势强度分桶", "section_trend_bucket")
         st.dataframe(
             _trend_probability_bucket_table(trend_probability_bucket_diagnostics(scores, labels)),
             width="stretch",
             hide_index=True,
         )
 
-    with factor_diagnostics_tab:
+    elif page == "Factor Diagnostics":
         diagnostics = factor_diagnostics(factors, labels)
         factor_summary = diagnostics["summary"]
         quintiles = diagnostics["quintiles"]
@@ -458,16 +431,16 @@ def main() -> None:
         else:
             st.info("当前没有足够数据生成因子五分位表现。")
 
-    with weight_diag_tab:
-        _render_weight_diagnostics_tab()
+    elif page == "Weight Diagnostics":
+        _render_weight_diagnostics_tab(expected_snapshot=snapshot_key)
 
-    with options_tab:
+    elif page == "Options":
         _render_options_tab(_available_option_snapshots())
 
-    with liquidity_tab:
+    elif page == "Liquidity":
         _render_liquidity_tab()
 
-    with logic_tab:
+    elif page == "Logic":
         _subheader("系统如何使用这些因子", "section_logic")
         st.markdown(
             """
@@ -576,7 +549,7 @@ def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
         _render_option_chart("Skew Curve", plots.get("skew_curve"), x_column="point", y_column="iv", chart="line")
 
 
-def _render_weight_diagnostics_tab(report_root: Path | str = WEIGHT_REPORT_ROOT) -> None:
+def _render_weight_diagnostics_tab(report_root: Path | str = WEIGHT_REPORT_ROOT, expected_snapshot: str | None = None) -> None:
     _subheader("Weight Diagnostics", "section_weight_diag")
     st.caption("Shadow mode only. current_weights is production; optimized weights are diagnostics; constrained_blended_weights is a shadow candidate.")
     report_path = Path(report_root) / "latest_weight_diagnostics.json"
@@ -593,6 +566,8 @@ def _render_weight_diagnostics_tab(report_root: Path | str = WEIGHT_REPORT_ROOT)
         st.error(f"Weight diagnostics report failed to load: {exc}")
         return
 
+    if expected_snapshot and report.get("snapshot") != expected_snapshot:
+        st.warning(f"这份权重报告使用快照 {report.get('snapshot', '未知')}。刷新研究报告后可与当前看板比较。")
     recommendation = report.get("recommendation", {})
     oos_summary = report.get("oos_summary", {})
     st.caption(
@@ -668,10 +643,13 @@ def _render_liquidity_tab(
     metric_columns = st.columns(6)
     metric_columns[0].metric("Indicators", f"{summary['success_count']}/{summary['indicator_count']}")
     metric_columns[1].metric("Latest Date", summary["latest_date"])
-    metric_columns[2].metric("Net Liquidity", summary["net_liquidity"])
-    metric_columns[3].metric("ON RRP", summary["on_rrp"])
-    metric_columns[4].metric("TGA", summary["tga"])
+    metric_columns[2].metric("净流动性（百万美元）", summary["net_liquidity"])
+    metric_columns[3].metric("ON RRP（十亿美元）", summary["on_rrp"])
+    metric_columns[4].metric("TGA（百万美元）", summary["tga"])
     metric_columns[5].metric("DXY", summary["dxy"])
+    proxy_dates = panel.loc[panel.get("Dollar liquidity proxy / Fed Net Liquidity proxy", pd.Series(index=panel.index, dtype=float)).notna(), "date"]
+    if not proxy_dates.empty:
+        st.caption(f"净流动性数据截至 {pd.Timestamp(proxy_dates.max()).date()}。周度分项沿用最近一次观测，此研究页独立于盘前评分。")
 
     source_table = _liquidity_source_table(availability)
     if not source_table.empty:
@@ -947,9 +925,7 @@ def _selected_label_row(labels: pd.DataFrame, selected_date: str) -> dict[str, A
 def _factor_rows_for_date(factors: pd.DataFrame, selected_date: str) -> pd.DataFrame:
     if factors.empty:
         return factors.copy()
-    prepared = factors.copy()
-    prepared["date_label"] = pd.to_datetime(prepared["date"]).dt.strftime("%Y-%m-%d")
-    return prepared[prepared["date_label"] == selected_date].drop(columns=["date_label"])
+    return factors.loc[pd.to_datetime(factors["date"]).eq(pd.Timestamp(selected_date))]
 
 
 def _factor_display_table(factors: pd.DataFrame) -> pd.DataFrame:
@@ -959,6 +935,8 @@ def _factor_display_table(factors: pd.DataFrame) -> pd.DataFrame:
     logic_groups = {row["factor_name"]: row["group"] for row in factor_logic_rows()}
     table = factors.copy()
     table["group"] = table["factor_name"].map(logic_groups).fillna("未分组")
+    available_date = pd.to_datetime(table.get("available_date", table["data_date"])).dt.strftime("%Y-%m-%d")
+    table["available_at"] = available_date + " " + table.get("available_time", table["asof_time"]).astype(str)
     if "data_source" not in table.columns:
         table["data_source"] = ""
     table["date"] = pd.to_datetime(table["date"]).dt.strftime("%Y-%m-%d")
@@ -973,7 +951,7 @@ def _factor_display_table(factors: pd.DataFrame) -> pd.DataFrame:
             "raw_value": "原始值",
             "zscore_value": "z-score",
             "directional_score": "方向分",
-            "asof_time": "可用时间",
+            "available_at": "可用时间",
         }
     )
     return _round_numeric(table[columns].sort_values(["信号日期", "模块", "因子"]))
@@ -1100,12 +1078,12 @@ def _score_bucket_table(frame: pd.DataFrame) -> pd.DataFrame:
 
 def _trend_probability_bucket_table(frame: pd.DataFrame) -> pd.DataFrame:
     if frame.empty:
-        return pd.DataFrame(columns=["趋势概率区间", "样本数", "实际趋势日率"])
+        return pd.DataFrame(columns=["趋势强度区间", "样本数", "实际趋势日率"])
     table = frame.copy()
     table["actual_trend_day_rate"] = table["actual_trend_day_rate"].map(_format_percent)
     return table.rename(
         columns={
-            "trend_probability_bucket": "趋势概率区间",
+            "trend_probability_bucket": "趋势强度区间",
             "sample_count": "样本数",
             "actual_trend_day_rate": "实际趋势日率",
         }
@@ -1223,8 +1201,8 @@ def _engine_summary_table(scores: pd.DataFrame) -> pd.DataFrame:
             "final_bias": "最终风向",
             "risk_override": "风险覆盖",
             "total_score": "总分",
-            "confidence": "置信度",
-            "trend_day_probability": "趋势日概率",
+            "confidence": "信号强度分",
+            "trend_day_probability": "趋势强度分",
             "trend_direction_bias": "趋势方向",
         }
     )
@@ -1330,7 +1308,7 @@ def _metrics_explanation_table(metrics: dict[str, Any]) -> pd.DataFrame:
         {
             "指标": "趋势日 precision",
             "当前值": _format_percent(metrics.get("trend_day_precision")),
-            "普通解释": "系统说趋势日概率高的时候，实际有多少天真成了趋势日。",
+            "普通解释": "系统说趋势强度分高的时候，实际有多少天真成了趋势日。",
             "怎么解读": _quality_label(metrics.get("trend_day_precision"), high=0.45, low=0.25),
         },
         {
@@ -1340,10 +1318,10 @@ def _metrics_explanation_table(metrics: dict[str, Any]) -> pd.DataFrame:
             "怎么解读": _quality_label(metrics.get("trend_day_recall"), high=0.45, low=0.25),
         },
         {
-            "指标": "大亏日过滤率",
+            "指标": "大亏日中性或防守率",
             "当前值": _format_percent(metrics.get("big_loss_day_filter_rate")),
             "普通解释": "真实大亏日里，有多少天系统没有给 Risk-On。",
-            "怎么解读": _quality_label(metrics.get("big_loss_day_filter_rate"), high=0.70, low=0.50),
+            "怎么解读": "始终中性的基准为 100%。明确预警的覆盖率另见大亏日明确防守率。",
         },
         {
             "指标": "Risk-Off 误伤率",
@@ -1357,7 +1335,7 @@ def _metrics_explanation_table(metrics: dict[str, Any]) -> pd.DataFrame:
 
 def _backtest_review_table(scores: pd.DataFrame, labels: pd.DataFrame) -> pd.DataFrame:
     scored = scores[["date", "bias_label", "total_score", "trend_day_probability", "trend_direction_bias"]].copy()
-    realized = labels[["date", "market_return", "trend_day_flag", "big_loss_day_flag"]].copy()
+    realized = labels.reindex(columns=["date", "market_return", "composite_open_to_close_return", "trend_day_flag", "big_loss_day_flag"]).copy()
     scored["date"] = pd.to_datetime(scored["date"]).dt.normalize()
     realized["date"] = pd.to_datetime(realized["date"]).dt.normalize()
     joined = scored.merge(realized, on="date", how="inner").sort_values("date", ascending=False)
@@ -1366,19 +1344,21 @@ def _backtest_review_table(scores: pd.DataFrame, labels: pd.DataFrame) -> pd.Dat
     joined["bias_label"] = joined["bias_label"].map(_bias_label)
     joined["trend_direction_bias"] = joined["trend_direction_bias"].map(_trend_label)
     joined["market_return"] = joined["market_return"].map(lambda value: _format_percent(value))
+    joined["composite_open_to_close_return"] = joined["composite_open_to_close_return"].map(_format_percent)
     joined = joined.rename(
         columns={
             "date": "日期",
             "bias_label": "开盘前风向",
             "total_score": "总分",
-            "trend_day_probability": "趋势日概率",
+            "trend_day_probability": "趋势强度分",
             "trend_direction_bias": "趋势方向",
-            "market_return": "实际市场收益",
+            "market_return": "收盘到收盘收益",
+            "composite_open_to_close_return": "开盘到收盘收益",
             "trend_day_flag": "实际趋势日",
             "big_loss_day_flag": "实际大亏日",
         }
     )
-    columns = ["日期", "开盘前风向", "总分", "趋势日概率", "趋势方向", "实际市场收益", "实际趋势日", "实际大亏日", "复盘结论"]
+    columns = ["日期", "开盘前风向", "总分", "趋势强度分", "趋势方向", "收盘到收盘收益", "开盘到收盘收益", "实际趋势日", "实际大亏日", "复盘结论"]
     return _round_numeric(joined[columns].head(80))
 
 
@@ -1386,10 +1366,9 @@ def _backtest_plain_language(metrics: dict[str, Any]) -> str:
     observations = metrics.get("observations", 0)
     return (
         f"本次回测共有 **{observations}** 个可比较交易日。"
-        f"方向命中率为 **{_format_percent(metrics.get('bias_accuracy'))}**；"
-        f"大亏日过滤率为 **{_format_percent(metrics.get('big_loss_day_filter_rate'))}**；"
-        f"Risk-Off 误伤率为 **{_format_percent(metrics.get('false_risk_off_rate'))}**。"
-        "这些指标用于复盘环境过滤器是否有用，不是收益率回测。"
+        f"按前收至今收评估，三类风向命中率为 **{_format_percent(metrics.get('bias_accuracy'))}**，"
+        f"始终给 Neutral 的命中率为 **{_format_percent(metrics.get('neutral_baseline_accuracy'))}**。"
+        "开盘到收盘的评价单独计算，两种口径使用相同的中性区间。"
     )
 
 
@@ -1398,8 +1377,10 @@ def _daily_review_label(row: pd.Series) -> str:
     market_return = float(row["market_return"])
     trend_day = bool(row["trend_day_flag"])
     big_loss = bool(row["big_loss_day_flag"])
-    if big_loss and bias != "Risk-On":
-        return "大亏日未给进攻，风险过滤有效"
+    if big_loss and bias == "Risk-Off":
+        return "大亏日已提前提示防守"
+    if big_loss and bias == "Neutral":
+        return "大亏日盘前为中性"
     if big_loss and bias == "Risk-On":
         return "严重漏判：大亏日仍给进攻"
     if bias == "Risk-On" and market_return > 0.003:
@@ -1618,7 +1599,7 @@ def _trading_posture(latest: dict[str, Any]) -> str:
     if label == "Risk-On":
         return "环境偏建设性。优先观察多头机会，但提高频率前仍需要开盘确认。"
     if trend_probability >= 60:
-        return "方向不清晰，但趋势日概率较高。降低均值回归假设，等待方向确认。"
+        return "方向不清晰，但趋势强度分较高。降低均值回归假设，等待方向确认。"
     return "中性环境。降低交易频率，等待更强确认。"
 
 
