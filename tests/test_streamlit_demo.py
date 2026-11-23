@@ -208,3 +208,24 @@ def test_dashboard_and_weight_optimizer_skip_newer_archived_provider(tmp_path, m
     monkeypatch.setattr(streamlit_app, "SNAPSHOT_ROOT", tmp_path)
     assert run_dashboard_pipeline()["snapshot_load_mode"] == "outputs"
     assert _resolve_snapshot_dir(None, str(tmp_path)) == path
+
+
+def test_overview_labels_partial_preview_and_leaves_option_chain_unloaded(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    import apps.streamlit_app as dashboard
+
+    raw = raw_market_inputs("2026-11-02", "2026-11-23")
+    overseas = raw["overseas_ohlcv"]
+    raw["overseas_ohlcv"] = overseas[overseas.date.ne("2026-11-23") | overseas.symbol.eq("KS11.GI")]
+    result = run_pipeline_from_raw(raw, config_dir=CONFIG_DIR)
+    save_snapshot(result, tmp_path, "wind", "2026-11-02", "2026-11-23")
+    monkeypatch.setattr(dashboard, "SNAPSHOT_ROOT", tmp_path)
+
+    def unexpected_chain_read():
+        raise AssertionError("Opening Overview must not load options.")
+
+    monkeypatch.setattr(dashboard, "_available_option_snapshots", unexpected_chain_read)
+    app = AppTest.from_string("from apps.streamlit_app import main\nmain()").run()
+    assert not app.exception and not app.error
+    assert any(metric.label == "市场风向（快照预览）" for metric in app.metric)
+    assert any("KS11.GI" in item.value and "10%" in item.value for item in app.info)

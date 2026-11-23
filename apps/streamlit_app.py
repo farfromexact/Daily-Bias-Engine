@@ -23,6 +23,7 @@ from daily_bias_engine.backtest import (
     trend_probability_bucket_diagnostics,
 )
 from daily_bias_engine.features import factor_logic_rows
+from daily_bias_engine.features.calculators import OVERSEAS_SYMBOL_WEIGHTS
 from daily_bias_engine.pipeline import (
     SnapshotInfo,
     list_snapshots,
@@ -252,6 +253,7 @@ def main() -> None:
     selected_row = _selected_engine_row(scores, selected_date)
     selected_explanation = selected_row.get("explanation", {}) if selected_row else {}
     selected_label = _selected_label_row(labels, selected_date)
+    is_preview = selected_date == latest_signal_date and not selected_label
 
     st.caption(_data_status_text(result, snapshot_info, scores))
 
@@ -265,7 +267,8 @@ def main() -> None:
     if page == "Overview":
         columns = st.columns(6)
         columns[0].metric("信号日期", selected_date, help=_help_text("metric_signal_date"))
-        columns[1].metric("市场风向", _bias_label(selected_row.get("bias_label") if selected_row else None), help=_help_text("metric_market_bias"))
+        columns[1].metric("市场风向（快照预览）" if is_preview else "市场风向",
+                          _bias_label(selected_row.get("bias_label") if selected_row else None), help=_help_text("metric_market_bias"))
         columns[2].metric("总分", _format_float(selected_row.get("total_score") if selected_row else None), help=_help_text("metric_total_score"))
         columns[3].metric(
             "趋势强度分",
@@ -280,13 +283,22 @@ def main() -> None:
             if closes:
                 st.caption("海外市场最近收盘（当地日期）  " + " · ".join(f"{k} {v}" for k, v in closes.items()))
                 components = result["report"].get("latest_overseas_components")
-                if components is not None and len(components) < len(closes):
-                    st.info("当前海外因子仅使用 " + "、".join(components) + " 的当日收盘，按可用市场重新分配权重。")
+                if components is not None and set(components) != set(OVERSEAS_SYMBOL_WEIGHTS):
+                    coverage = sum(OVERSEAS_SYMBOL_WEIGHTS.get(code, 0.0) for code in components)
+                    st.info(f"本快照海外因子使用 {'、'.join(components)} 的当日收盘，覆盖原设权重的 {coverage:.0%}。"
+                            "计算时按实际参与的市场重新分配权重。")
             if result["report"].get("signal_calendar") != "wind_sse":
                 st.caption("此历史快照缺少 Wind 交易日历，末端盘前日期按工作日估算。")
 
         _subheader("每日环境卡片", "section_daily_card")
-        st.write(_trading_posture(selected_row))
+        flags = _record_list(selected_row.get("risk_flags_json", [])) if selected_row else []
+        overseas_override = (is_preview and selected_row.get("risk_override") and flags
+                             and all(flag.get("group") == "overseas_market" for flag in flags))
+        if overseas_override:
+            st.write(f"加权总分对应 {_bias_label(selected_row['raw_score_bias'])}。"
+                     "此次预览的硬风险覆盖全部来自海外因子，下一份快照可用于复核。")
+        else:
+            st.write(_trading_posture(selected_row))
 
         override = _override_summary_table(selected_row)
         if not override.empty:
@@ -306,9 +318,8 @@ def main() -> None:
             st.dataframe(_drivers_table(selected_explanation.get("negative_drivers", [])), width="stretch", hide_index=True)
 
         _subheader("风险硬标记", "section_hard_risk")
-        risk_flags = _record_list(selected_row.get("risk_flags_json", [])) if selected_row else []
-        if risk_flags:
-            st.dataframe(_risk_flags_table(risk_flags), width="stretch", hide_index=True)
+        if flags:
+            st.dataframe(_risk_flags_table(flags), width="stretch", hide_index=True)
         else:
             st.write("无")
 
