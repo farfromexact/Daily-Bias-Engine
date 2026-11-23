@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "product": "CSI1000",
+  "trade_date": "2026-11-23",
+  "window_start": "2026-11-23T14:00:00+08:00",
+  "as_of": "2026-11-23T15:00:00+08:00",
+  "prior_chain_date": "2026-11-20",
+  "sign": "indeterminate",
+  "method": "passive_flow_and_index_response_v1",
+  "reasons": [
+    "low_chain_coverage",
+    "balanced_flow"
+  ],
+  "dealer_net_gex_observed": false,
+  "coverage": {
+    "eligible_contracts": 262,
+    "priceable_contracts": 255,
+    "sample_contracts": 19,
+    "selected_prior_gex_share": 0.5054143388020491,
+    "mean_observed_prior_gex_share": 0.4599524849003543,
+    "last_observed_prior_gex_share": 0.0,
+    "contracts": [
+      "MO2612-C-6200.CFE",
+      "MO2612-P-5500.CFE",
+      "MO2612-C-6000.CFE",
+      "MO2612-P-6000.CFE",
+      "MO2612-C-6500.CFE",
+      "MO2612-P-5600.CFE",
+      "MO2612-C-6300.CFE",
+      "MO2612-P-6200.CFE",
+      "MO2612-P-5700.CFE",
+      "MO2612-P-5900.CFE",
+      "MO2612-C-6400.CFE",
+      "MO2612-P-5800.CFE",
+      "MO2612-C-6600.CFE",
+      "MO2612-C-6100.CFE",
+      "MO2612-P-5400.CFE",
+      "MO2612-C-7000.CFE",
+      "MO2612-P-5300.CFE",
+      "MO2612-C-5800.CFE",
+      "MO2612-C-5900.CFE"
+    ]
+  },
+  "flow": {
+    "sign": "unclear",
+    "passive_change_rmb_per_1pct": 10655338.174869955,
+    "classified_share": 0.5724489739162796,
+    "imbalance": 0.028148964129195465,
+    "signed_updates": 11742,
+    "unclassified_rmb_per_1pct": 282719648.2960078,
+    "classified_rmb_per_1pct": 378533935.59937364,
+    "sample_change_low": -272064310.12113786,
+    "sample_change_high": 293374986.47087777
+  },
+  "price_response": {
+    "sign": "negative",
+    "lag1_return_corr": 0.20913312128080036,
+    "return_pairs": 56,
+    "baseline_days": 20,
+    "baseline_q25": -0.038898819208326614,
+    "baseline_q75": 0.20466479729463338
+  },
+  "bars": [
+    {
+      "as_of": "2026-11-23T14:05:00+08:00",
+      "passive_change_rmb_per_1pct": 2625796.9930848144,
+      "classified_rmb_per_1pct": 44080746.597992435,
+      "unclassified_rmb_per_1pct": 36283601.03310974,
+      "observed_prior_gex_share": 0.5054143388020491
+    },
+    {
+      "as_of": "2026-11-23T14:10:00+08:00",
+      "passive_change_rmb_per_1pct": -1944730.5168299675,
+      "classified_rmb_per_1pct": 40863762.14293688,
+      "unclassified_rmb_per_1pct": 28991287.06858493,
+      "observed_prior_gex_share": 0.5054143388020491
+    },
+    {
+      "as_of": "2026-11-23T14:15:00+08:00",
+      "passive_change_rmb_per_1pct": 621266.1566661783,
+      "classified_rmb_per_1pct": 39333079.72222409,
+      "unclassified_rmb_per_1pct": 31151955.251503736,
+      "observed_prior_gex_share": 0.5054143388020491
+    },
+    {
+      "as_of": "2026-11-23T14:20:00+08:00",
+      "passive_change_rmb_per_1pct": 6023096.183334913,
+      "classified_rmb_per_1pct": 37230873.65818174,
+      "unclassified_rmb_per_1pct": 30177006.69103639,
+      "observed_prior_gex_share": 0.5054143388020491
+    },
+    {
+      "as_of": "2026-11-23T14:25:00+08:00",
+      "passive_change_rmb_per_1pct": 177006.19880198687,
+      "classified_rmb_per_1pct": 37209901.47454558,
+      "unclassified_rmb_per_1pct": 31584667.470114417,
+      "observed_prior_gex_share": 0.4652864307837591
+    },
+    {
+      "as_of": "2026-11-23T14:30:00+08:00",
+      "passive_change_rmb_per_1pct": -1548069.3155333772,
+      "classified_rmb_per_1pct": 21756214.697767153,
+      "unclassified_rmb_per_1pct": 17996672.332538083,
+      "observed_prior_gex_share": 0.5054143388020491
+    },
+    {
+      "as_of": "2026-11-23T14:35:00+08:00",
+      "passive_change_rmb_per_1pct": 2577361.5391944014,
+      "classified_rmb_per_1pct": 36316147.45768756,
+      "unclassified_rmb_per_1pct": 28813501.856669687,
+      "observed_prior_gex_share": 0.5054143388020491
+    },
+    {
+      "as_of": "2026-11-23T14:40:00+08:00",
+      "passive_change_rmb_per_1pct": -842127.1275432128,
+      "classified_rmb_per_1pct": 24264288.78385417,
+      "unclassified_rmb_per_1pct": 15466100.517457105,
+      "observed_prior_gex_share": 0.5054143388020491
+    },
+    {
+      "as_of": "2026-11-23T14:45:00+08:00",
+      "passive_change_rmb_per_1pct": -242566.2151393406,
+      "classified_rmb_per_1pct": 26277554.837439403,
+      "unclassified_rmb_per_1pct": 15809606.504661275,
+      "observed_prior_gex_share": 0.5054143388020491
+    },
+    {
+      "as_of": "2026-11-23T14:50:00+08:00",
+      "passive_change_rmb_per_1pct": 1590246.0787804015,
+      "classified_rmb_per_1pct": 30519973.000477728,
+      "unclassified_rmb_per_1pct": 20484891.34707516,
+      "observed_prior_gex_share": 0.5054143388020491
+    },
+    {
+      "as_of": "2026-11-23T14:55:00+08:00",
+      "passive_change_rmb_per_1pct": 1618058.200053133,
+      "classified_rmb_per_1pct": 40681393.2262669,
+      "unclassified_rmb_per_1pct": 25960358.223257285,
+      "observed_prior_gex_share": 0.5054143388020491
+    },
+    {
+      "as_of": "2026-11-23T15:00:00+08:00",
+      "passive_change_rmb_per_1pct": null,
+      "classified_rmb_per_1pct": 0.0,
+      "unclassified_rmb_per_1pct": 0.0,
+      "observed_prior_gex_share": 0.0
+    }
+  ],
+  "computed_at": "2026-11-23T20:20:29.566960+08:00",
+  "source": "WindPy WST / WSI",
+  "index_code": "000852.SH"
+}

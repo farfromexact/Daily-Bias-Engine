@@ -12,6 +12,7 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(PROJECT_ROOT / "src"), str(PROJECT_ROOT)]
 
+from daily_bias_engine.desk_api import archive_market_bias
 from daily_bias_engine.options.data import OptionMarketDataStore, WindPyOptionClient
 from daily_bias_engine.pipeline import default_history_range, list_snapshots
 from scripts.fetch_wind_options_snapshot import fetch_option_dates
@@ -77,6 +78,7 @@ def main() -> None:
     update_wind_options(args.options_root, target, args.options_start, args.dry_run)
     if not args.dry_run:
         for snapshot in list_snapshots(args.snapshot_root, source="wind")[args.keep_wind_snapshots:]:
+            archive_market_bias(args.snapshot_root, snapshot)
             shutil.rmtree(snapshot.path)
             print(f"removed_old_wind_snapshot={snapshot.path}", flush=True)
 

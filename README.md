@@ -47,6 +47,7 @@ Daily Bias Engine 是一个面向 A 股指数环境判断的盘前市场风向�
 - Weight Diagnostics：展示当前权重、优化权重和 constrained blended shadow 权重。
 - Liquidity：展示独立的美元流动性面板，指标保留采集时的实际来源（包括 FRED 和 Yahoo）。此面板不参与风向评分。
 - Options：展示本地 Wind 期权链衍生出的关键价位、敞口、波动率和偏度结构。
+- 日内 GEX 结合期权成交方向与指数分钟线，显示上证 50、沪深 300 和中证 1000 的做市商 Gamma 倾向、样本覆盖和判断依据。
 - Logic：说明因子到 directional score、总分和最终 bias 的计算逻辑。
 
 ## Architecture
@@ -93,6 +94,17 @@ python -m streamlit run apps/streamlit_app.py
 ```
 
 The dashboard automatically loads the latest local Wind market snapshot under `data/snapshots/`. If no snapshot exists, run `python scripts/fetch_wind_snapshot.py` first.
+
+## 日内 GEX 与交易台
+
+在项目虚拟环境中运行以下命令，分别更新最新五分钟快照、启动本机只读接口。
+
+```bash
+python scripts/update_intraday_gex.py
+python -m daily_bias_engine.desk_api --port 8507
+```
+
+采集端支持 `--product CSI300`、`--as-of 2026-11-23T14:55` 和盘中连续采集 `--watch`。看板通过左侧「日内 GEX」查看。交易台按 IH、IF、IM 读取对应的期权判断及全市场盘前风向。[接口契约、估计口径和接入步骤](docs/TRADING_DESK_INTEGRATION.md)
 
 ## Run Tests
 

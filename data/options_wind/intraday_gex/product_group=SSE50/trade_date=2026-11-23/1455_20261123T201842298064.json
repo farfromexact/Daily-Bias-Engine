@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "product": "SSE50",
+  "trade_date": "2026-11-23",
+  "window_start": "2026-11-23T13:55:00+08:00",
+  "as_of": "2026-11-23T14:55:00+08:00",
+  "prior_chain_date": "2026-11-20",
+  "sign": "indeterminate",
+  "method": "passive_flow_and_index_response_v1",
+  "reasons": [
+    "balanced_flow"
+  ],
+  "dealer_net_gex_observed": false,
+  "coverage": {
+    "eligible_contracts": 230,
+    "priceable_contracts": 229,
+    "sample_contracts": 9,
+    "selected_prior_gex_share": 0.5175434894373929,
+    "mean_observed_prior_gex_share": 0.514088791108994,
+    "last_observed_prior_gex_share": 0.5175434894373929,
+    "contracts": [
+      "10012439.SH",
+      "10012448.SH",
+      "10012440.SH",
+      "10012447.SH",
+      "10012438.SH",
+      "10011427.SH",
+      "HO2612-C-2800.CFE",
+      "10011434.SH",
+      "HO2612-C-2750.CFE"
+    ]
+  },
+  "flow": {
+    "sign": "unclear",
+    "passive_change_rmb_per_1pct": 13485461.269625843,
+    "classified_share": 0.5689786732862352,
+    "imbalance": 0.03523509619843923,
+    "signed_updates": 8249,
+    "unclassified_rmb_per_1pct": 289929973.3396168,
+    "classified_rmb_per_1pct": 382728095.6940652,
+    "sample_change_low": -276444512.06999093,
+    "sample_change_high": 303415434.6092426
+  },
+  "price_response": {
+    "sign": "negative",
+    "lag1_return_corr": 0.4164137458752081,
+    "return_pairs": 59,
+    "baseline_days": 20,
+    "baseline_q25": -0.03942427410338353,
+    "baseline_q75": 0.0993255838611383
+  },
+  "bars": [
+    {
+      "as_of": "2026-11-23T14:00:00+08:00",
+      "passive_change_rmb_per_1pct": -2123807.8191079553,
+      "classified_rmb_per_1pct": 27560770.4296358,
+      "unclassified_rmb_per_1pct": 32881177.65443754,
+      "observed_prior_gex_share": 0.47608710949660643
+    },
+    {
+      "as_of": "2026-11-23T14:05:00+08:00",
+      "passive_change_rmb_per_1pct": 764716.332496332,
+      "classified_rmb_per_1pct": 25014806.806829013,
+      "unclassified_rmb_per_1pct": 27213027.40176686,
+      "observed_prior_gex_share": 0.5175434894373929
+    },
+    {
+      "as_of": "2026-11-23T14:10:00+08:00",
+      "passive_change_rmb_per_1pct": 4335863.646162167,
+      "classified_rmb_per_1pct": 45102595.52964492,
+      "unclassified_rmb_per_1pct": 55772646.4791956,
+      "observed_prior_gex_share": 0.5175434894373929
+    },
+    {
+      "as_of": "2026-11-23T14:15:00+08:00",
+      "passive_change_rmb_per_1pct": 5014408.564928198,
+      "classified_rmb_per_1pct": 36939183.97616058,
+      "unclassified_rmb_per_1pct": 29653902.628672596,
+      "observed_prior_gex_share": 0.5175434894373929
+    },
+    {
+      "as_of": "2026-11-23T14:20:00+08:00",
+      "passive_change_rmb_per_1pct": 2542370.135389641,
+      "classified_rmb_per_1pct": 31182527.540014222,
+      "unclassified_rmb_per_1pct": 16651530.434423624,
+      "observed_prior_gex_share": 0.5175434894373929
+    },
+    {
+      "as_of": "2026-11-23T14:25:00+08:00",
+      "passive_change_rmb_per_1pct": -530519.1743822377,
+      "classified_rmb_per_1pct": 32793106.719635427,
+      "unclassified_rmb_per_1pct": 19622391.681965567,
+      "observed_prior_gex_share": 0.5175434894373929
+    },
+    {
+      "as_of": "2026-11-23T14:30:00+08:00",
+      "passive_change_rmb_per_1pct": 2664144.871605741,
+      "classified_rmb_per_1pct": 26733235.06322421,
+      "unclassified_rmb_per_1pct": 12622328.84417448,
+      "observed_prior_gex_share": 0.5175434894373929
+    },
+    {
+      "as_of": "2026-11-23T14:35:00+08:00",
+      "passive_change_rmb_per_1pct": 4718674.188864786,
+      "classified_rmb_per_1pct": 30173367.782229114,
+      "unclassified_rmb_per_1pct": 14449719.802450374,
+      "observed_prior_gex_share": 0.5175434894373929
+    },
+    {
+      "as_of": "2026-11-23T14:40:00+08:00",
+      "passive_change_rmb_per_1pct": -38301.15650495514,
+      "classified_rmb_per_1pct": 23412224.608598884,
+      "unclassified_rmb_per_1pct": 13314942.10563814,
+      "observed_prior_gex_share": 0.5175434894373929
+    },
+    {
+      "as_of": "2026-11-23T14:45:00+08:00",
+      "passive_change_rmb_per_1pct": 1727881.0122025274,
+      "classified_rmb_per_1pct": 24686710.33561989,
+      "unclassified_rmb_per_1pct": 8165016.733673011,
+      "observed_prior_gex_share": 0.5175434894373929
+    },
+    {
+      "as_of": "2026-11-23T14:50:00+08:00",
+      "passive_change_rmb_per_1pct": -2310557.2957750075,
+      "classified_rmb_per_1pct": 30456628.78603622,
+      "unclassified_rmb_per_1pct": 13733337.855486698,
+      "observed_prior_gex_share": 0.5175434894373929
+    },
+    {
+      "as_of": "2026-11-23T14:55:00+08:00",
+      "passive_change_rmb_per_1pct": -3279412.036253378,
+      "classified_rmb_per_1pct": 48672938.116436936,
+      "unclassified_rmb_per_1pct": 45849951.71773229,
+      "observed_prior_gex_share": 0.5175434894373929
+    }
+  ],
+  "computed_at": "2026-11-23T20:18:42.298064+08:00",
+  "source": "WindPy WST / WSI",
+  "index_code": "000016.SH"
+}

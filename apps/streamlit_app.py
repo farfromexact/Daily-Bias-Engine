@@ -31,7 +31,9 @@ from daily_bias_engine.pipeline import (
     run_pipeline_from_snapshot,
 )
 from daily_bias_engine.options.data import OptionMarketDataStore
+from daily_bias_engine.options.analytics.intraday_gex import PRODUCT_ROOTS, SHANGHAI, freshness, local_time
 from daily_bias_engine.options.reports.daily_option_state import generate_daily_option_state
+from daily_bias_engine.options.reports.intraday_gex import report_dates, report_paths
 
 CONFIG_DIR = PROJECT_ROOT / "configs"
 SNAPSHOT_ROOT = PROJECT_ROOT / "data" / "snapshots"
@@ -221,6 +223,16 @@ def _render_first_time_guide() -> None:
 def main() -> None:
     st.set_page_config(page_title="市场风向机", layout="wide")
     st.title("市场风向机 / Daily Bias Engine")
+    pages = ["Overview", "Factors", "Engine", "Labels", "Backtest", "Backtest Diagnostics",
+             "Factor Diagnostics", "Weight Diagnostics", "Options", "日内 GEX", "Liquidity", "Logic"]
+    initial_page = "日内 GEX" if st.query_params.get("view") == "intraday-gex" else "Overview"
+    page = st.sidebar.radio("研究页面", pages, index=pages.index(initial_page), key="research_page")
+    if page == "日内 GEX":
+        if hasattr(st, "fragment"):
+            st.fragment(run_every=60)(_render_intraday_gex)()
+        else:
+            _render_intraday_gex()
+        return
     _render_first_time_guide()
 
     snapshots = list_snapshots(SNAPSHOT_ROOT, source="wind")
@@ -256,13 +268,6 @@ def main() -> None:
     is_preview = selected_date == latest_signal_date and not selected_label
 
     st.caption(_data_status_text(result, snapshot_info, scores))
-
-    page = st.sidebar.radio(
-        "研究页面",
-        ["Overview", "Factors", "Engine", "Labels", "Backtest", "Backtest Diagnostics",
-         "Factor Diagnostics", "Weight Diagnostics", "Options", "Liquidity", "Logic"],
-        key="research_page",
-    )
 
     if page == "Overview":
         columns = st.columns(6)
@@ -486,8 +491,100 @@ def _available_option_snapshots(data_root: Path | str = OPTION_DATA_ROOT) -> dic
     return snapshots
 
 
+def _render_intraday_gex() -> None:
+    st.subheader("日内做市商 GEX 估计")
+    names = {"IH": "上证 50 · IH", "IF": "沪深 300 · IF", "IM": "中证 1000 · IM"}
+    roots = list(PRODUCT_ROOTS)
+    default = st.query_params.get("root", "IF")
+    controls = st.columns([2, 2, 2, 1])
+    root = controls[0].selectbox("标的", roots, index=roots.index(default) if default in roots else 1,
+                                 format_func=names.get, key="intraday_root")
+    controls[3].button("刷新快照", help="读取最近一次 Wind 采集已保存的结果。")
+    dates = report_dates(OPTION_DATA_ROOT, PRODUCT_ROOTS[root])[::-1]
+    if not dates:
+        st.info(f"{names[root]} 尚无日内快照。")
+        st.code(f"python scripts/update_intraday_gex.py --product {PRODUCT_ROOTS[root]}", language="bash")
+        return
+    day = controls[1].selectbox("行情日期", dates, key=f"intraday_day_{root}")
+    # Paths are sorted by cutoff and then by publication time. Show the latest revision of each cutoff.
+    by_time = {path.name[:4]: path for path in report_paths(OPTION_DATA_ROOT, PRODUCT_ROOTS[root], day)}
+    if not by_time:
+        st.info("正在等待所选交易日的首份快照。")
+        return
+    times = sorted(by_time, reverse=True)
+    choice = controls[2].selectbox("观察截止", ["最新"] + times, key=f"intraday_cutoff_{root}_{day}",
+                                   format_func=lambda value: value if value == "最新" else f"{value[:2]}:{value[2:]}")
+    report = json.loads(by_time[times[0] if choice == "最新" else choice].read_text(encoding="utf-8"))
+    end, start = local_time(report["as_of"]), local_time(report["window_start"])
+    computed = local_time(report["computed_at"])
+    status = freshness(end, local_time(pd.Timestamp.now(tz=SHANGHAI)))
+    status_text = {"recent": "近期更新", "delayed": "延迟快照", "midday_close": "午间收盘",
+                   "session_close": "当日收盘", "prior_session": "历史交易日"}[status]
+    if choice != "最新":
+        status_text = "历史复盘"
+    if computed - end > pd.Timedelta(minutes=10):
+        status_text += " · 事后生成"
+    st.caption(f"{names[root]}　·　{end:%Y-%m-%d} {start:%H:%M}–{end:%H:%M}　·　{status_text}　·　"
+               f"生成于 {computed:%m-%d %H:%M:%S}（上海时间）")
+    flow, price, coverage = report["flow"], report["price_response"], report["coverage"]
+    signs = {"positive": "偏正 GEX", "negative": "偏负 GEX", "indeterminate": "证据不足"}
+    reasons = {"low_chain_coverage": "平均或末段有效覆盖低于 40%",
+               "insufficient_signed_flow": "可判向成交占比低于 50% 或有效更新少于 20 次",
+               "balanced_flow": "已判向成交的净失衡未达到 15%",
+               "unclear_price_response": "指数延续或回撤证据不足",
+               "conflicting_evidence": "期权成交与指数反应指向相反方向"}
+    st.metric("综合判断", signs[report["sign"]])
+    if report["reasons"]:
+        st.write("。".join(reasons[item] for item in report["reasons"]) + "。")
+    else:
+        st.write("期权成交和指数价格反应指向同一方向，且样本达到覆盖要求。")
+    st.caption("盘口看不到交易双方的账户和期初持仓。判断基于做市商承接主动成交的假设。")
+    left, right = st.columns(2)
+    with left:
+        st.markdown("#### 期权成交")
+        amount = flow["passive_change_rmb_per_1pct"]
+        st.metric("被动方 GEX 净变化（万元 / 标的变动 1%）", "—" if amount is None else f"{amount/1e4:+,.0f}")
+        gap = flow["imbalance"]
+        share = flow["classified_share"]
+        gap_text = "—" if gap is None else f"{gap:+.1%}"
+        share_text = "—" if share is None else f"{share:.1%}"
+        st.write(f"净失衡 {gap_text}　·　可判向占比 {share_text}　·　"
+                 f"已判向 {flow['signed_updates']:,} 次更新")
+        if flow["sample_change_low"] is not None:
+            st.caption(f"把样本中未判向成交分别全部计入两侧，净变化从 {flow['sample_change_low']/1e4:+,.0f} "
+                       f"到 {flow['sample_change_high']/1e4:+,.0f} 万元 / 标的变动 1%。")
+    with right:
+        st.markdown("#### 指数价格反应")
+        price_labels = {"negative": "偏延续", "positive": "偏回撤", "unclear": "方向不清"}
+        st.metric("一分钟收益的滞后一阶相关", _format_float(price["lag1_return_corr"], 2))
+        st.write(f"{price_labels[price['sign']]}　·　{price['return_pairs']} 对相邻收益　·　"
+                 f"{price['baseline_days']} 个历史交易日")
+        st.caption(f"过去同一时段相关系数的四分位区间为 {_format_float(price['baseline_q25'], 2)} "
+                   f"至 {_format_float(price['baseline_q75'], 2)}。")
+    st.markdown("#### 五分钟成交变化")
+    bars = pd.DataFrame(report["bars"])
+    bars["时间"] = bars.as_of.map(lambda value: local_time(value).strftime("%H:%M"))
+    bars["被动方净变化（万元 / 1%）"] = bars.passive_change_rmb_per_1pct / 1e4
+    st.bar_chart(bars, x="时间", y="被动方净变化（万元 / 1%）")
+    st.caption(f"按 {report['prior_chain_date']} 收盘的无符号 GEX 选取 {coverage['sample_contracts']} 份合约，"
+               f"占可定价链 {coverage['selected_prior_gex_share']:.1%}。盘口和标的价格齐全的部分，"
+               f"窗口平均覆盖 {coverage['mean_observed_prior_gex_share']:.1%}，末段覆盖 "
+               f"{coverage['last_observed_prior_gex_share']:.1%}。")
+    with st.expander("查看每段覆盖和计算口径"):
+        bars["有效覆盖"] = bars.observed_prior_gex_share.map(lambda value: f"{value:.1%}")
+        bars["已判向总量（万元 / 1%）"] = bars.classified_rmb_per_1pct / 1e4
+        bars["未判向总量（万元 / 1%）"] = bars.unclassified_rmb_per_1pct / 1e4
+        st.dataframe(bars[["时间", "被动方净变化（万元 / 1%）", "已判向总量（万元 / 1%）",
+                           "未判向总量（万元 / 1%）", "有效覆盖"]], width="stretch", hide_index=True)
+        st.write("成交价和增量成交均价都落在前一笔有效卖价时记主动买，落在买价时记主动卖。"
+                 "主动卖出期权使被动方增加 Gamma，主动买入使其减少。用当时标的价和上一交易日隐波换算金额。"
+                 "观察窗口最长 60 分钟，午休后重新累计，14:57 起成交保留为未判向。")
+
+
 def _render_options_tab(option_snapshots: dict[str, list[str]]) -> None:
     _subheader("Local Option State", "section_options")
+    st.info("本页按做市商卖出全部认购和认沽的情景计算日终 GEX。要估计盘中的正负方向，"
+            "请查看左侧「日内 GEX」的成交与价格证据。")
     st.caption(f"Source: Wind local option chains at {OPTION_DATA_ROOT / 'normalized_chain'}")
     if not option_snapshots:
         st.info(
@@ -1593,10 +1690,10 @@ def _format_percent(value: Any) -> str:
     return f"{float(value) * 100:.1f}%"
 
 
-def _format_float(value: Any) -> str:
+def _format_float(value: Any, decimals: int = 3) -> str:
     if _is_missing_scalar(value):
         return "N/A"
-    return f"{float(value):.3f}"
+    return f"{float(value):.{decimals}f}"
 
 
 def _trading_posture(latest: dict[str, Any]) -> str:
